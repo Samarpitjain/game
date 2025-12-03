@@ -1,0 +1,142 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useAuthStore } from '@/store/useAuthStore';
+import Link from 'next/link';
+
+const games = [
+  { id: 'DICE', name: 'Dice', icon: '🎲' },
+  { id: 'LIMBO', name: 'Limbo', icon: '🚀' },
+  { id: 'CRASH', name: 'Crash', icon: '📈' },
+  { id: 'MINES', name: 'Mines', icon: '💣' },
+  { id: 'PLINKO', name: 'Plinko', icon: '⚪' },
+  { id: 'ROULETTE', name: 'Roulette', icon: '🎡' },
+  { id: 'KENO', name: 'Keno', icon: '🎱' },
+  { id: 'WHEEL', name: 'Wheel', icon: '🎰' },
+];
+
+export default function HomePage() {
+  const { loadUser, isAuthenticated, user } = useAuthStore();
+
+  useEffect(() => {
+    loadUser();
+  }, [loadUser]);
+
+  return (
+    <div className="min-h-screen bg-gray-900">
+      {/* Header */}
+      <header className="border-b border-gray-800">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <h1 className="text-3xl font-bold gradient-text">CasinoBit</h1>
+          
+          <div className="flex items-center gap-4">
+            {isAuthenticated ? (
+              <>
+                <span className="text-sm">
+                  Welcome, <span className="text-primary">{user?.username}</span>
+                </span>
+                <Link href="/wallet" className="btn-primary">
+                  Wallet
+                </Link>
+              </>
+            ) : (
+              <>
+                <Link href="/login" className="btn-secondary">
+                  Login
+                </Link>
+                <Link href="/register" className="btn-primary">
+                  Register
+                </Link>
+              </>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Hero Section */}
+      <section className="py-20 text-center">
+        <h2 className="text-5xl font-bold mb-4 gradient-text">
+          Provably Fair Casino
+        </h2>
+        <p className="text-xl text-gray-400 mb-8">
+          Play with confidence. Every bet is verifiable.
+        </p>
+        <div className="flex gap-4 justify-center">
+          <Link href="/games" className="btn-primary text-lg px-8 py-3">
+            Play Now
+          </Link>
+          <Link href="/fairness" className="btn-secondary text-lg px-8 py-3">
+            Learn About Fairness
+          </Link>
+        </div>
+      </section>
+
+      {/* Games Grid */}
+      <section className="container mx-auto px-4 py-12">
+        <h3 className="text-3xl font-bold mb-8">Popular Games</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {games.map((game) => (
+            <Link
+              key={game.id}
+              href={`/game/${game.id.toLowerCase()}`}
+              className="card hover:border-primary transition-all cursor-pointer group"
+            >
+              <div className="text-6xl mb-4 group-hover:scale-110 transition-transform">
+                {game.icon}
+              </div>
+              <h4 className="text-xl font-bold">{game.name}</h4>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="container mx-auto px-4 py-12">
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="card text-center">
+            <div className="text-4xl mb-4">🔒</div>
+            <h4 className="text-xl font-bold mb-2">Provably Fair</h4>
+            <p className="text-gray-400">
+              Verify every bet with our transparent RNG system
+            </p>
+          </div>
+          <div className="card text-center">
+            <div className="text-4xl mb-4">⚡</div>
+            <h4 className="text-xl font-bold mb-2">Instant Payouts</h4>
+            <p className="text-gray-400">
+              Win and withdraw instantly with crypto
+            </p>
+          </div>
+          <div className="card text-center">
+            <div className="text-4xl mb-4">🎁</div>
+            <h4 className="text-xl font-bold mb-2">Jackpots & Contests</h4>
+            <p className="text-gray-400">
+              Compete for massive prizes daily
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-gray-800 mt-20">
+        <div className="container mx-auto px-4 py-8 text-center text-gray-400">
+          <p>&copy; 2024 CasinoBit. All rights reserved.</p>
+          <div className="flex gap-4 justify-center mt-4">
+            <Link href="/fairness" className="hover:text-primary">
+              Fairness
+            </Link>
+            <Link href="/limits" className="hover:text-primary">
+              Limits
+            </Link>
+            <Link href="/contests" className="hover:text-primary">
+              Contests
+            </Link>
+            <Link href="/leaderboard" className="hover:text-primary">
+              Leaderboard
+            </Link>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
