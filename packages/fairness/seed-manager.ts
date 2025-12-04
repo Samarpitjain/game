@@ -1,4 +1,4 @@
-import { prisma } from '@casino/database';
+import { prisma, Prisma } from '@casino/database';
 import { generateServerSeed, hashServerSeed, generateClientSeed } from './rng';
 
 /**
@@ -40,6 +40,36 @@ export class SeedManager {
     }
 
     return seedPair;
+  }
+
+  /**
+   * Reserve seed for bet (atomic nonce increment within transaction)
+   * MUST be called inside a Prisma transaction
+   */
+  static async reserveSeedForBet(
+    tx: Prisma.TransactionClient,
+    userId: string
+  ) {
+    const seed = await tx.seedPair.findFirst({
+      where: { userId, isActive: true },
+    });
+
+    if (!seed) {
+      throw new Error('No active seed pair found');
+    }
+
+    const updated = await tx.seedPair.update({
+      where: { id: seed.id },
+      data: { nonce: { increment: 1 } },
+    });
+
+    return {
+      seedPairId: seed.id,
+      serverSeed: seed.serverSeed,
+      clientSeed: seed.clientSeed,
+      nonce: updated.nonce,
+      serverSeedHash: seed.serverSeedHash,
+    };
   }
 
   /**

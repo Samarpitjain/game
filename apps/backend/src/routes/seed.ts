@@ -7,6 +7,23 @@ const updateClientSeedSchema = z.object({
 });
 
 const seedRoutes: FastifyPluginAsync = async (fastify) => {
+  // Initialize seed pair (create if missing)
+  fastify.post('/init', {
+    onRequest: [fastify.authenticate],
+  }, async (request) => {
+    const userId = (request.user as any).id;
+    
+    // Check if seed pair already exists
+    const existing = await SeedManager.getActiveSeedPair(userId);
+    
+    return {
+      id: existing.id,
+      serverSeedHash: existing.serverSeedHash,
+      clientSeed: existing.clientSeed,
+      nonce: existing.nonce,
+    };
+  });
+
   // Get active seed pair
   fastify.get('/active', {
     onRequest: [fastify.authenticate],

@@ -1,8 +1,7 @@
-import { prisma, BetStatus, GameType, Currency } from '@casino/database';
+import { prisma, BetStatus, GameType, Currency, Prisma } from '@casino/database';
 import { gameRegistry } from '@casino/game-engine';
 import { SeedManager } from '@casino/fairness';
 import { WalletService } from './wallet-service';
-import { JackpotService } from './jackpot-service';
 import { EventEmitter } from 'events';
 
 export const betEvents = new EventEmitter();
@@ -23,126 +22,120 @@ export interface PlaceBetInput {
  */
 export class BetEngine {
   /**
-   * Place a bet
+   * Place a bet (FULLY ATOMIC)
    */
   static async placeBet(input: PlaceBetInput) {
     const { userId, gameType, currency, amount, gameParams, isDemo, isAutoBet, strategyId } = input;
 
-    // Get or create active seed pair
-    const seedPair = await SeedManager.getActiveSeedPair(userId);
-
-    // Lock wallet balance (skip for demo)
-    if (!isDemo) {
-      await WalletService.lockBalance(userId, currency, amount);
+    if (!isDemo && amount <= 0) {
+      throw new Error('Bet amount must be positive');
     }
 
-    try {
-      // Get game instance
-      const game = gameRegistry.getGame(gameType);
+    // Ensure seed pair exists BEFORE transaction
+    await SeedManager.getActiveSeedPair(userId);
 
-      // Play game
-      const result = game.play({
-        amount,
-        currency,
-        seedData: {
-          serverSeed: seedPair.serverSeed,
-          clientSeed: seedPair.clientSeed,
-          nonce: seedPair.nonce,
-        },
-        gameParams,
-      });
+    const betResult = await prisma.$transaction(
+      async (tx) => {
+        const seedData = await SeedManager.reserveSeedForBet(tx, userId);
 
-      // Determine bet status
-      const status = result.won ? BetStatus.WON : BetStatus.LOST;
-
-      // Create bet record
-      const bet = await prisma.bet.create({
-        data: {
-          userId,
-          gameType,
-          currency,
-          amount,
-          multiplier: result.multiplier,
-          payout: result.payout,
-          profit: result.profit,
-          status,
-          seedPairId: seedPair.id,
-          nonce: seedPair.nonce,
-          gameData: gameParams,
-          result: result.result,
-          isDemo: isDemo || false,
-          isAutoBet: isAutoBet || false,
-          strategyId,
-        },
-      });
-
-      // Increment nonce
-      await SeedManager.incrementNonce(seedPair.id);
-
-      // Process payout (skip for demo)
-      if (!isDemo) {
-        await WalletService.unlockBalance(userId, currency, amount);
-
-        if (result.won) {
-          await WalletService.addBalance(userId, currency, result.payout);
+        let walletId: string | undefined;
+        if (!isDemo) {
+          const wallet = await WalletService.debitAndLockBalance(tx, userId, currency, amount);
+          walletId = wallet.id;
         }
 
-        // Update user stats
-        await this.updateUserStats(userId, amount, result.profit, result.won);
+        const game = gameRegistry.getGame(gameType);
+        const result = game.play({
+          amount,
+          currency,
+          seedData: {
+            serverSeed: seedData.serverSeed,
+            clientSeed: seedData.clientSeed,
+            nonce: seedData.nonce,
+          },
+          gameParams,
+        });
 
-        // Check jackpot
-        await JackpotService.checkJackpot(bet.id, gameType, currency, amount);
-      }
+        const status = result.won ? BetStatus.WON : BetStatus.LOST;
 
-      // Emit bet event
-      betEvents.emit('bet-placed', {
-        userId,
-        betId: bet.id,
-        gameType,
-        amount,
-        multiplier: result.multiplier,
-        won: result.won,
-      });
+        const bet = await tx.bet.create({
+          data: {
+            userId,
+            gameType,
+            currency,
+            amount,
+            multiplier: result.multiplier,
+            payout: result.payout,
+            profit: result.profit,
+            status,
+            seedPairId: seedData.seedPairId,
+            nonce: seedData.nonce,
+            gameData: gameParams as any,
+            result: result.result as any,
+            isDemo: isDemo || false,
+            isAutoBet: isAutoBet || false,
+            strategyId,
+          },
+        });
 
-      // Emit user activity
-      betEvents.emit('user-activity', {
-        user_id: userId,
-        activity: 'bet_placed',
-        brief_desc: `Placed ${amount} ${currency} bet on ${gameType}`,
-        severity: 'info',
-        meta_data: { betId: bet.id, gameType, amount, won: result.won },
-      });
+        if (!isDemo && walletId) {
+          if (result.won) {
+            await WalletService.creditAndUnlockBalance(tx, userId, walletId, currency, amount, result.payout);
+          } else {
+            await WalletService.releaseLockOnLoss(tx, userId, walletId, currency, amount);
+          }
 
-      return { bet, result };
-    } catch (error) {
-      // Unlock balance on error
-      if (!isDemo) {
-        await WalletService.unlockBalance(userId, currency, amount);
-      }
-      throw error;
-    }
-  }
+          await tx.userStats.upsert({
+            where: { userId },
+            create: {
+              userId,
+              totalWagered: amount,
+              totalProfit: result.profit,
+              totalWins: result.won ? 1 : 0,
+              totalLosses: result.won ? 0 : 1,
+            },
+            update: {
+              totalWagered: { increment: amount },
+              totalProfit: { increment: result.profit },
+              totalWins: result.won ? { increment: 1 } : undefined,
+              totalLosses: result.won ? undefined : { increment: 1 },
+            },
+          });
+        }
 
-  /**
-   * Update user statistics
-   */
-  private static async updateUserStats(userId: string, wagered: number, profit: number, won: boolean) {
-    await prisma.userStats.upsert({
-      where: { userId },
-      create: {
-        userId,
-        totalWagered: wagered,
-        totalProfit: profit,
-        totalWins: won ? 1 : 0,
-        totalLosses: won ? 0 : 1,
+        return { bet, result };
       },
-      update: {
-        totalWagered: { increment: wagered },
-        totalProfit: { increment: profit },
-        totalWins: won ? { increment: 1 } : undefined,
-        totalLosses: won ? undefined : { increment: 1 },
-      },
+      {
+        maxWait: 5000,
+        timeout: 10000,
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      }
+    );
+
+    const wallet = isDemo ? null : await WalletService.getWallet(userId, currency);
+
+    betEvents.emit('bet-placed', {
+      userId,
+      betId: betResult.bet.id,
+      gameType,
+      amount,
+      multiplier: betResult.result.multiplier,
+      won: betResult.result.won,
     });
+
+    betEvents.emit('user-activity', {
+      user_id: userId,
+      activity: 'bet_placed',
+      brief_desc: `Placed ${amount} ${currency} bet on ${gameType}`,
+      severity: 'info',
+      meta_data: { betId: betResult.bet.id, gameType, amount, won: betResult.result.won },
+    });
+
+    return {
+      bet: betResult.bet,
+      result: betResult.result,
+      wallet,
+    };
   }
 
   /**

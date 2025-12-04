@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import { BetEngine } from '../services/bet-engine';
-// import { AutoBetService } from '../services/autobet-service';
+import { AutoBetService } from '../services/autobet-service';
 import { z } from 'zod';
 
 const placeBetSchema = z.object({
@@ -58,25 +58,45 @@ const betRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // Start autobet (DISABLED - Requires Redis 5+)
+  // Start autobet
   fastify.post('/autobet/start', {
     onRequest: [fastify.authenticate],
   }, async (request, reply) => {
-    return reply.code(503).send({ error: 'Auto-bet temporarily disabled. Upgrade Redis to 5.0+' });
+    try {
+      console.log('AutoBet request body:', JSON.stringify(request.body, null, 2));
+      const body = autoBetSchema.parse(request.body);
+      const userId = (request.user as any).id;
+
+      await AutoBetService.startAutoBet(userId, body.config, {
+        userId,
+        gameType: body.gameType as any,
+        currency: body.currency as any,
+        amount: body.amount,
+        gameParams: body.gameParams,
+      });
+
+      return { success: true, message: 'Auto-bet started' };
+    } catch (error: any) {
+      console.error('AutoBet error:', error);
+      return reply.code(400).send({ error: error.message || error.toString() });
+    }
   });
 
   // Stop autobet
   fastify.post('/autobet/stop', {
     onRequest: [fastify.authenticate],
   }, async (request) => {
-    return { success: true, message: 'Auto-bet disabled' };
+    const userId = (request.user as any).id;
+    await AutoBetService.stopAutoBet(userId);
+    return { success: true, message: 'Auto-bet stopped' };
   });
 
   // Get autobet status
   fastify.get('/autobet/status', {
     onRequest: [fastify.authenticate],
   }, async (request) => {
-    return { active: false, message: 'Auto-bet disabled' };
+    const userId = (request.user as any).id;
+    return AutoBetService.getAutoBetStatus(userId);
   });
 
   // Get bet history
