@@ -33,8 +33,19 @@ export default function FairnessModal({ isOpen, onClose }: FairnessModalProps) {
   const handleRotateSeed = async () => {
     setLoading(true);
     try {
-      await seedAPI.rotate();
-      toast.success('Seed rotated successfully');
+      const response = await seedAPI.rotate();
+      const { oldSeed, newSeed } = response.data;
+      
+      // Show revealed server seed
+      toast.success(
+        <div>
+          <div className="font-bold mb-2">Seed Rotated!</div>
+          <div className="text-xs">Old Server Seed Revealed:</div>
+          <div className="font-mono text-xs break-all">{oldSeed.serverSeed}</div>
+        </div>,
+        { duration: 10000 }
+      );
+      
       await loadSeedData();
     } catch (error) {
       toast.error('Failed to rotate seed');
@@ -73,6 +84,17 @@ export default function FairnessModal({ isOpen, onClose }: FairnessModalProps) {
 
           {seedData && (
             <div className="space-y-6">
+              {/* Status Badge */}
+              <div className="bg-green-900/20 border border-green-500 rounded-lg p-3 flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-green-500">Active Seed Pair</div>
+                  <div className="text-sm text-gray-400">{seedData.betCount || 0} bets placed</div>
+                </div>
+                <div className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
+                  ACTIVE
+                </div>
+              </div>
+
               {/* Server Seed Hash */}
               <div>
                 <label className="block text-sm text-gray-400 mb-2">
@@ -82,7 +104,7 @@ export default function FairnessModal({ isOpen, onClose }: FairnessModalProps) {
                   {seedData.serverSeedHash}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  This hash proves the server seed was generated before your bets
+                  ⚠️ Server seed is HIDDEN until you rotate. This hash proves it was generated before your bets.
                 </p>
               </div>
 

@@ -8,12 +8,10 @@ export interface AutoBetConfig {
   onWin: {
     reset: boolean;
     increaseBy?: number;
-    decreaseBy?: number;
   };
   onLoss: {
     reset: boolean;
     increaseBy?: number;
-    decreaseBy?: number;
   };
   stopOnProfit?: number;
   stopOnLoss?: number;
@@ -44,7 +42,7 @@ const STRATEGY_PRESETS = {
   },
   dalembert: {
     name: "D'Alembert",
-    onWin: { reset: false, decreaseBy: 10 },
+    onWin: { reset: true },
     onLoss: { reset: false, increaseBy: 10 },
   },
   paroli: {
@@ -59,10 +57,10 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
   const [numberOfBets, setNumberOfBets] = useState(0);
   const [strategy, setStrategy] = useState<keyof typeof STRATEGY_PRESETS>('manual');
   
-  const [onWinAction, setOnWinAction] = useState<'reset' | 'increase' | 'decrease'>('reset');
+  const [onWinAction, setOnWinAction] = useState<'reset' | 'increase'>('reset');
   const [onWinPercent, setOnWinPercent] = useState(100);
   
-  const [onLossAction, setOnLossAction] = useState<'reset' | 'increase' | 'decrease'>('increase');
+  const [onLossAction, setOnLossAction] = useState<'reset' | 'increase'>('reset');
   const [onLossPercent, setOnLossPercent] = useState(100);
   
   const [stopOnProfit, setStopOnProfit] = useState<number | undefined>();
@@ -77,9 +75,6 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
     } else if (preset.onWin.increaseBy) {
       setOnWinAction('increase');
       setOnWinPercent(preset.onWin.increaseBy);
-    } else if (preset.onWin.decreaseBy) {
-      setOnWinAction('decrease');
-      setOnWinPercent(preset.onWin.decreaseBy);
     }
     
     if (preset.onLoss.reset) {
@@ -87,9 +82,6 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
     } else if (preset.onLoss.increaseBy) {
       setOnLossAction('increase');
       setOnLossPercent(preset.onLoss.increaseBy);
-    } else if (preset.onLoss.decreaseBy) {
-      setOnLossAction('decrease');
-      setOnLossPercent(preset.onLoss.decreaseBy);
     }
   };
 
@@ -100,12 +92,10 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
       onWin: {
         reset: onWinAction === 'reset',
         increaseBy: onWinAction === 'increase' ? onWinPercent : undefined,
-        decreaseBy: onWinAction === 'decrease' ? onWinPercent : undefined,
       },
       onLoss: {
         reset: onLossAction === 'reset',
         increaseBy: onLossAction === 'increase' ? onLossPercent : undefined,
-        decreaseBy: onLossAction === 'decrease' ? onLossPercent : undefined,
       },
       stopOnProfit,
       stopOnLoss,
@@ -191,8 +181,7 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
               className="input flex-1"
             >
               <option value="reset">Reset</option>
-              <option value="increase">Increase</option>
-              <option value="decrease">Decrease</option>
+              <option value="increase">Increase %</option>
             </select>
             {onWinAction !== 'reset' && (
               <input
@@ -216,8 +205,7 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
               className="input flex-1"
             >
               <option value="reset">Reset</option>
-              <option value="increase">Increase</option>
-              <option value="decrease">Decrease</option>
+              <option value="increase">Increase %</option>
             </select>
             {onLossAction !== 'reset' && (
               <input

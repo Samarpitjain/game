@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { createHmac, createHash } from 'crypto';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
@@ -36,6 +37,7 @@ export const betAPI = {
   startAutobet: (data: any) => api.post('/bet/autobet/start', data),
   stopAutobet: () => api.post('/bet/autobet/stop'),
   autobetStatus: () => api.get('/bet/autobet/status'),
+  verifyBet: (betId: string) => api.get(`/bet/${betId}`),
 };
 
 // Wallet API
@@ -54,6 +56,8 @@ export const seedAPI = {
   rotate: () => api.post('/seed/rotate'),
   verify: (seedPairId: string) => api.get(`/seed/verify/${seedPairId}`),
   getBetCount: () => api.get('/seed/bet-count'),
+  getHistory: () => api.get('/seed/history'),
+  unhash: (serverSeed: string) => api.post('/seed/unhash', { serverSeed }),
 };
 
 // Game API
@@ -102,4 +106,12 @@ export const leaderboardAPI = {
     api.get('/leaderboard/big-wins', { params: { currency, limit } }),
   luckyWins: (limit?: number) =>
     api.get('/leaderboard/lucky-wins', { params: { limit } }),
+};
+
+// Verification API (client-side only, no auth needed)
+export const verifyAPI = {
+  calculateResult: (serverSeed: string, clientSeed: string, nonce: number, gameType: string) => {
+    // This will be implemented client-side using crypto
+    return { serverSeed, clientSeed, nonce, gameType };
+  },
 };

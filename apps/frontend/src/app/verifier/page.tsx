@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import crypto from 'crypto-js';
+import { createHmac, createHash } from 'crypto';
 
 export default function VerifierPage() {
   const [serverSeed, setServerSeed] = useState('');
@@ -17,10 +17,12 @@ export default function VerifierPage() {
       return;
     }
 
-    // Generate HMAC
-    const hmac = crypto.HmacSHA256(`${clientSeed}:${nonce}:0`, serverSeed).toString();
+    // Generate HMAC (Stake implementation)
+    const currentRound = Math.floor(0 / 32); // cursor = 0 for most games
+    const message = `${clientSeed}:${nonce}:${currentRound}`;
+    const hmac = createHmac('sha256', serverSeed).update(message).digest('hex');
     
-    // Convert first 8 hex chars to float
+    // Convert first 4 bytes (8 hex chars) to float
     const hex = hmac.substring(0, 8);
     const intValue = parseInt(hex, 16);
     const float = intValue / 0x100000000;
@@ -30,28 +32,45 @@ export default function VerifierPage() {
     
     switch (gameType) {
       case 'DICE':
-        const roll = parseFloat((float * 100).toFixed(2));
+        // Stake's Dice formula: (float * 10001) / 100
+        const roll = Math.floor(float * 10001) / 100;
         gameResult = {
-          roll,
+          roll: roll.toFixed(2),
           float,
-          explanation: `Roll = float * 100 = ${float.toFixed(6)} * 100 = ${roll}`,
+          hmac,
+          explanation: `Roll = floor(${float.toFixed(10)} * 10001) / 100 = ${roll.toFixed(2)}`,
         };
         break;
         
       case 'LIMBO':
+        // Stake's Limbo formula: (1 / float) * houseEdge, min 1.00
         const houseEdge = 0.99; // 1% house edge
-        const limboResult = parseFloat(((99 * houseEdge) / (100 * float)).toFixed(2));
-        const cappedResult = Math.min(limboResult, 1000000);
+        const floatPoint = (1 / float) * houseEdge;
+        const crashPoint = Math.floor(floatPoint * 100) / 100;
+        const limboResult = Math.max(crashPoint, 1.00);
         gameResult = {
-          result: cappedResult,
+          result: limboResult.toFixed(2),
           float,
-          explanation: `Result = (99 * 0.99) / (100 * ${float.toFixed(6)}) = ${limboResult.toFixed(2)} (capped at 1M)`,
+          hmac,
+          explanation: `Result = max(floor((1 / ${float.toFixed(10)}) * 0.99 * 100) / 100, 1.00) = ${limboResult.toFixed(2)}`,
+        };
+        break;
+
+      case 'ROULETTE':
+        // Stake's Roulette formula: floor(float * 37)
+        const pocket = Math.floor(float * 37);
+        gameResult = {
+          pocket,
+          float,
+          hmac,
+          explanation: `Pocket = floor(${float.toFixed(10)} * 37) = ${pocket}`,
         };
         break;
         
       default:
         gameResult = {
           float,
+          hmac,
           explanation: 'Select a game type to see specific result calculation',
         };
     }
@@ -65,7 +84,7 @@ export default function VerifierPage() {
       return;
     }
     
-    const hash = crypto.SHA256(serverSeed).toString();
+    const hash = createHash('sha256').update(serverSeed).digest('hex');
     alert(`Server Seed Hash:\n${hash}`);
   };
 
@@ -149,8 +168,9 @@ export default function VerifierPage() {
               >
                 <option value="DICE">Dice</option>
                 <option value="LIMBO">Limbo</option>
-                <option value="MINES">Mines</option>
-                <option value="PLINKO">Plinko</option>
+                <option value="ROULETTE">Roulette</option>
+                <option value="MINES">Mines (Coming Soon)</option>
+                <option value="PLINKO">Plinko (Coming Soon)</option>
               </select>
             </div>
 
@@ -172,6 +192,13 @@ export default function VerifierPage() {
                   <div className="font-mono text-lg">{result.float?.toFixed(10)}</div>
                 </div>
 
+                {result.hmac && (
+                  <div>
+                    <div className="text-sm text-gray-400">HMAC-SHA256 Output</div>
+                    <div className="font-mono text-xs break-all text-gray-300">{result.hmac}</div>
+                  </div>
+                )}
+
                 {result.roll !== undefined && (
                   <div>
                     <div className="text-sm text-gray-400">Dice Roll</div>
@@ -190,6 +217,15 @@ export default function VerifierPage() {
                   </div>
                 )}
 
+                {result.pocket !== undefined && (
+                  <div>
+                    <div className="text-sm text-gray-400">Roulette Pocket</div>
+                    <div className="font-mono text-2xl font-bold text-secondary">
+                      {result.pocket}
+                    </div>
+                  </div>
+                )}
+
                 <div className="bg-gray-900 p-4 rounded">
                   <div className="text-sm text-gray-400 mb-2">Calculation</div>
                   <div className="font-mono text-sm text-gray-300">
@@ -198,9 +234,11 @@ export default function VerifierPage() {
                 </div>
 
                 <div className="text-xs text-gray-500">
-                  <p>HMAC-SHA256(serverSeed, clientSeed:nonce:cursor)</p>
-                  <p>First 8 hex characters converted to float (0-1)</p>
-                  <p>Float mapped to game-specific outcome</p>
+                  <p><strong>Stake's Provably Fair Algorithm:</strong></p>
+                  <p>1. currentRound = floor(cursor / 32)</p>
+                  <p>2. HMAC-SHA256(serverSeed, "clientSeed:nonce:currentRound")</p>
+                  <p>3. First 4 bytes (8 hex chars) → float (0-1)</p>
+                  <p>4. Float mapped to game-specific outcome</p>
                 </div>
               </div>
             )}

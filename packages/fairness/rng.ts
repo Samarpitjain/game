@@ -36,14 +36,18 @@ export function generateClientSeed(): string {
 /**
  * Core byte generator using HMAC-SHA256
  * Returns hex string of HMAC output
+ * @param serverSeed - Server seed
+ * @param clientSeed - Client seed
+ * @param nonce - Nonce (bet counter)
+ * @param currentRound - Current round (floor(cursor / 32))
  */
-export function generateHmac(serverSeed: string, clientSeed: string, nonce: number, cursor: number = 0): string {
-  const message = `${clientSeed}:${nonce}:${cursor}`;
+export function generateHmac(serverSeed: string, clientSeed: string, nonce: number, currentRound: number = 0): string {
+  const message = `${clientSeed}:${nonce}:${currentRound}`;
   return crypto.createHmac('sha256', serverSeed).update(message).digest('hex');
 }
 
 /**
- * Byte generator - produces unlimited bytes using cursor system
+ * Byte generator - produces unlimited bytes using cursor system (Stake implementation)
  * @param seedData - Server seed, client seed, nonce, and cursor
  * @param count - Number of bytes needed
  * @returns Buffer of random bytes
@@ -54,14 +58,18 @@ export function byteGenerator(seedData: SeedData, count: number): Buffer {
   const bytes: number[] = [];
 
   while (bytes.length < count) {
-    const hmac = generateHmac(serverSeed, clientSeed, nonce, cursor);
+    // Stake's cursor implementation: currentRound = floor(cursor / 32)
+    const currentRound = Math.floor(cursor / 32);
+    const hmac = generateHmac(serverSeed, clientSeed, nonce, currentRound);
     const hmacBytes = Buffer.from(hmac, 'hex');
     
-    for (let i = 0; i < hmacBytes.length && bytes.length < count; i++) {
-      bytes.push(hmacBytes[i]);
-    }
+    // Calculate position within current round
+    const currentRoundCursor = cursor % 32;
     
-    cursor++;
+    for (let i = currentRoundCursor; i < hmacBytes.length && bytes.length < count; i++) {
+      bytes.push(hmacBytes[i]);
+      cursor++;
+    }
   }
 
   return Buffer.from(bytes);
@@ -126,6 +134,7 @@ export function generateInts(seedData: SeedData, count: number, min: number, max
 
 /**
  * Verify a bet result using seed data
+ * Returns the HMAC hex string for verification
  */
 export function verifyResult(
   serverSeed: string,
@@ -137,23 +146,68 @@ export function verifyResult(
 }
 
 /**
+ * Verify server seed hash matches the original hash
+ */
+export function verifyServerSeedHash(serverSeed: string, serverSeedHash: string): boolean {
+  return hashServerSeed(serverSeed) === serverSeedHash;
+}
+
+/**
+ * Get cursor count for different games (Stake implementation)
+ * Most games use cursor = 0 (single float)
+ * Complex games need multiple floats
+ */
+export function getGameCursorCount(gameType: string): number {
+  const cursorMap: Record<string, number> = {
+    // Single cursor (0) - 1 float
+    DICE: 0,
+    LIMBO: 0,
+    WHEEL: 0,
+    ROULETTE: 0,
+    BACCARAT: 0,
+    DIAMONDS: 0,
+    CASES: 0,
+    DARTS: 0,
+    PRIMEDICE: 0,
+    PACKS: 0,
+    TAROT: 0,
+    
+    // Multiple cursors - multiple floats
+    KENO: 2,        // 10 outcomes
+    MINES: 3,       // 24 bomb locations
+    PLINKO: 2,      // 16 decisions
+    HILO: 13,       // Unlimited cards
+    BLACKJACK: 13,  // Unlimited cards
+    VIDEO_POKER: 7, // 52 cards
+  };
+  
+  return cursorMap[gameType] || 0;
+}
+
+/**
  * Calculate house edge adjusted probability
+ * NOTE: This should NOT be used in RNG - only for display/payout calculations
+ * @deprecated Use house edge in multiplier calculation instead
  */
 export function applyHouseEdge(winChance: number, houseEdge: number): number {
   return winChance * (1 - houseEdge / 100);
 }
 
 /**
- * Calculate multiplier from win chance
+ * Calculate multiplier from win chance with house edge (Stake style)
+ * House edge reduces the payout multiplier, not the RNG probability
+ * Formula: (99 / winChance) * (1 - houseEdge / 100)
  */
 export function calculateMultiplier(winChance: number, houseEdge: number = 1): number {
-  const adjustedChance = applyHouseEdge(winChance, houseEdge);
-  return adjustedChance > 0 ? (100 / adjustedChance) : 0;
+  if (winChance <= 0) return 0;
+  const baseMultiplier = 99 / winChance; // Stake uses 99 instead of 100
+  return baseMultiplier * (1 - houseEdge / 100);
 }
 
 /**
  * Calculate win chance from multiplier
  */
 export function calculateWinChance(multiplier: number, houseEdge: number = 1): number {
-  return (100 / multiplier) * (1 - houseEdge / 100);
+  if (multiplier <= 0) return 0;
+  return (100 / multiplier) / (1 - houseEdge / 100);
 }

@@ -58,7 +58,9 @@ export class SeedManager {
       throw new Error('No active seed pair found');
     }
 
-    const updated = await tx.seedPair.update({
+    const currentNonce = seed.nonce;
+
+    await tx.seedPair.update({
       where: { id: seed.id },
       data: { nonce: { increment: 1 } },
     });
@@ -67,7 +69,7 @@ export class SeedManager {
       seedPairId: seed.id,
       serverSeed: seed.serverSeed,
       clientSeed: seed.clientSeed,
-      nonce: updated.nonce,
+      nonce: currentNonce,
       serverSeedHash: seed.serverSeedHash,
     };
   }
@@ -86,6 +88,17 @@ export class SeedManager {
    * Rotate to new seed pair (reveals old server seed)
    */
   static async rotateSeedPair(userId: string, newClientSeed?: string) {
+    const currentSeed = await prisma.seedPair.findFirst({
+      where: { userId, isActive: true },
+    });
+
+    if (currentSeed) {
+      const computedHash = hashServerSeed(currentSeed.serverSeed);
+      if (computedHash !== currentSeed.serverSeedHash) {
+        throw new Error('Server seed hash mismatch - integrity violation');
+      }
+    }
+
     // Deactivate current seed pair and reveal server seed
     await prisma.seedPair.updateMany({
       where: { userId, isActive: true },

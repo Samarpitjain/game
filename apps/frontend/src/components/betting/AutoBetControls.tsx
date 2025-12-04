@@ -5,11 +5,11 @@ import { useState } from 'react';
 export interface AutoBetConfig {
   numberOfBets: number;
   onWin: {
-    action: 'reset' | 'increase' | 'decrease';
+    action: 'reset' | 'increase';
     value?: number;
   };
   onLoss: {
-    action: 'reset' | 'increase' | 'decrease';
+    action: 'reset' | 'increase';
     value?: number;
   };
   stopOnProfit?: number;
@@ -17,20 +17,24 @@ export interface AutoBetConfig {
 }
 
 interface AutoBetControlsProps {
+  amount: number;
+  balance: number;
+  onAmountChange: (amount: number) => void;
   onStart: (config: AutoBetConfig) => void;
   onStop: () => void;
   isActive: boolean;
   disabled?: boolean;
 }
 
-export default function AutoBetControls({ onStart, onStop, isActive, disabled }: AutoBetControlsProps) {
+export default function AutoBetControls({ amount, balance, onAmountChange, onStart, onStop, isActive, disabled }: AutoBetControlsProps) {
   const [numberOfBets, setNumberOfBets] = useState(0);
-  const [onWinAction, setOnWinAction] = useState<'reset' | 'increase' | 'decrease'>('reset');
-  const [onWinValue, setOnWinValue] = useState(100);
-  const [onLossAction, setOnLossAction] = useState<'reset' | 'increase' | 'decrease'>('increase');
-  const [onLossValue, setOnLossValue] = useState(100);
-  const [stopOnProfit, setStopOnProfit] = useState<number | undefined>();
-  const [stopOnLoss, setStopOnLoss] = useState<number | undefined>();
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [onWinAction, setOnWinAction] = useState<'reset' | 'increase'>('reset');
+  const [onWinValue, setOnWinValue] = useState(0);
+  const [onLossAction, setOnLossAction] = useState<'reset' | 'increase'>('reset');
+  const [onLossValue, setOnLossValue] = useState(0);
+  const [stopOnProfit, setStopOnProfit] = useState<number>(0);
+  const [stopOnLoss, setStopOnLoss] = useState<number>(0);
 
   const handleStart = () => {
     const config: any = {
@@ -39,12 +43,10 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
       onWin: {
         reset: onWinAction === 'reset',
         increaseBy: onWinAction === 'increase' ? onWinValue : undefined,
-        decreaseBy: onWinAction === 'decrease' ? onWinValue : undefined,
       },
       onLoss: {
         reset: onLossAction === 'reset',
         increaseBy: onLossAction === 'increase' ? onLossValue : undefined,
-        decreaseBy: onLossAction === 'decrease' ? onLossValue : undefined,
       },
       stopOnProfit,
       stopOnLoss,
@@ -58,89 +60,144 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm text-gray-400 mb-2">Number of Bets (0 = Infinite)</label>
+          <label className="block text-sm text-gray-400 mb-2">Amount</label>
           <input
             type="number"
-            value={numberOfBets}
-            onChange={(e) => setNumberOfBets(parseInt(e.target.value) || 0)}
+            value={amount}
+            onChange={(e) => onAmountChange(parseFloat(e.target.value) || 0)}
             className="input w-full"
             min="0"
+            step="0.01"
+            disabled={disabled || isActive}
           />
+          <div className="grid grid-cols-4 gap-2 mt-2">
+            <button onClick={() => onAmountChange(amount / 2)} disabled={disabled || isActive} className="btn-secondary py-2">½×</button>
+            <button onClick={() => onAmountChange(amount * 2)} disabled={disabled || isActive} className="btn-secondary py-2">2×</button>
+            <button onClick={() => onAmountChange(balance)} disabled={disabled || isActive} className="btn-secondary py-2">Max</button>
+            <button onClick={() => onAmountChange(10)} disabled={disabled || isActive} className="btn-secondary py-2">Reset</button>
+          </div>
         </div>
-
         <div>
-          <label className="block text-sm text-gray-400 mb-2">On Win</label>
-          <div className="flex gap-2">
-            <select
-              value={onWinAction}
-              onChange={(e) => setOnWinAction(e.target.value as any)}
-              className="input flex-1"
-            >
-              <option value="reset">Reset</option>
-              <option value="increase">Increase</option>
-              <option value="decrease">Decrease</option>
-            </select>
-            {onWinAction !== 'reset' && (
-              <input
-                type="number"
-                value={onWinValue}
-                onChange={(e) => setOnWinValue(parseFloat(e.target.value) || 0)}
-                className="input w-24"
-                placeholder="%"
-              />
-            )}
+          <label className="block text-sm text-gray-400 mb-2">Number of Games</label>
+          <div className="relative">
+            <input
+              type="number"
+              value={numberOfBets}
+              onChange={(e) => setNumberOfBets(parseInt(e.target.value) || 0)}
+              className="input w-full pr-10"
+              min="0"
+              disabled={disabled || isActive}
+            />
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400">∞</span>
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm text-gray-400 mb-2">On Loss</label>
-          <div className="flex gap-2">
-            <select
-              value={onLossAction}
-              onChange={(e) => setOnLossAction(e.target.value as any)}
-              className="input flex-1"
-            >
-              <option value="reset">Reset</option>
-              <option value="increase">Increase</option>
-              <option value="decrease">Decrease</option>
-            </select>
-            {onLossAction !== 'reset' && (
+        <div className="flex items-center justify-between">
+          <label className="text-sm text-gray-400">Advanced</label>
+          <button
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            disabled={disabled || isActive}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showAdvanced ? 'bg-green-500' : 'bg-gray-700'}`}
+          >
+            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${showAdvanced ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
+
+        {showAdvanced && (
+          <>
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">On Win</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setOnWinAction('reset')}
+                  disabled={disabled || isActive}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${onWinAction === 'reset' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400'}`}
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={() => setOnWinAction('increase')}
+                  disabled={disabled || isActive}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${onWinAction === 'increase' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400'}`}
+                >
+                  Increase by:
+                </button>
+                {onWinAction === 'increase' && (
+                  <>
+                    <input
+                      type="number"
+                      value={onWinValue}
+                      onChange={(e) => setOnWinValue(parseFloat(e.target.value) || 0)}
+                      className="input w-20"
+                      disabled={disabled || isActive}
+                    />
+                    <span className="flex items-center text-gray-400">%</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">On Loss</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setOnLossAction('reset')}
+                  disabled={disabled || isActive}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${onLossAction === 'reset' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400'}`}
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={() => setOnLossAction('increase')}
+                  disabled={disabled || isActive}
+                  className={`px-4 py-2 rounded-lg font-medium transition-all ${onLossAction === 'increase' ? 'bg-gray-700 text-white' : 'bg-gray-800 text-gray-400'}`}
+                >
+                  Increase by:
+                </button>
+                {onLossAction === 'increase' && (
+                  <>
+                    <input
+                      type="number"
+                      value={onLossValue}
+                      onChange={(e) => setOnLossValue(parseFloat(e.target.value) || 0)}
+                      className="input w-20"
+                      disabled={disabled || isActive}
+                    />
+                    <span className="flex items-center text-gray-400">%</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Stop on Net Gain</label>
               <input
                 type="number"
-                value={onLossValue}
-                onChange={(e) => setOnLossValue(parseFloat(e.target.value) || 0)}
-                className="input w-24"
-                placeholder="%"
+                value={stopOnProfit}
+                onChange={(e) => setStopOnProfit(parseFloat(e.target.value) || 0)}
+                className="input w-full"
+                step="0.00000001"
+                disabled={disabled || isActive}
               />
-            )}
-          </div>
-        </div>
+            </div>
 
-        <div>
-          <label className="block text-sm text-gray-400 mb-2">Stop on Profit ($)</label>
-          <input
-            type="number"
-            value={stopOnProfit || ''}
-            onChange={(e) => setStopOnProfit(parseFloat(e.target.value) || undefined)}
-            className="input w-full"
-            placeholder="Leave empty for no limit"
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm text-gray-400 mb-2">Stop on Loss ($)</label>
-          <input
-            type="number"
-            value={stopOnLoss || ''}
-            onChange={(e) => setStopOnLoss(parseFloat(e.target.value) || undefined)}
-            className="input w-full"
-            placeholder="Leave empty for no limit"
-          />
-        </div>
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Stop on Loss</label>
+              <input
+                type="number"
+                value={stopOnLoss}
+                onChange={(e) => setStopOnLoss(parseFloat(e.target.value) || 0)}
+                className="input w-full"
+                step="0.00000001"
+                disabled={disabled || isActive}
+              />
+            </div>
+          </>
+        )}
 
         {isActive ? (
           <button onClick={onStop} className="btn-secondary w-full py-3 text-lg">
-            Stop Auto-Bet
+            Stop Autoplay
           </button>
         ) : (
           <button
@@ -148,7 +205,7 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
             disabled={disabled}
             className="btn-primary w-full py-3 text-lg disabled:opacity-50"
           >
-            Start Auto-Bet
+            Start Autoplay
           </button>
         )}
       </div>

@@ -58,7 +58,7 @@ export default function DicePage() {
       });
 
       const { bet, result: gameResult } = response.data;
-      setResult(gameResult);
+      setResult(gameResult.result || gameResult);
 
       if (gameResult.won) {
         toast.success(`Won $${gameResult.profit.toFixed(2)}!`);
@@ -174,6 +174,9 @@ export default function DicePage() {
               {/* Auto Bet */}
               {betMode === 'auto' && (
                 <AutoBetControls
+                  amount={amount}
+                  balance={balance}
+                  onAmountChange={setAmount}
                   onStart={handleStartAutoBet}
                   onStop={handleStopAutoBet}
                   isActive={autoBetActive}
