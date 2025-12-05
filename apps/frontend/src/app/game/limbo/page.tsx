@@ -4,28 +4,15 @@ import { useState, useEffect } from 'react';
 import { betAPI, walletAPI } from '@/lib/api';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import BetModeSelector from '@/components/betting/BetModeSelector';
-import ManualBetControls from '@/components/betting/ManualBetControls';
-import AutoBetControls, { AutoBetConfig } from '@/components/betting/AutoBetControls';
-import DiceGameControls, { DiceGameParams } from '@/components/games/dice/DiceGameControls';
 import FairnessModal from '@/components/games/FairnessModal';
 
-type BetMode = 'manual' | 'auto' | 'strategy';
-
-export default function DicePage() {
-  const [betMode, setBetMode] = useState<BetMode>('manual');
+export default function LimboPage() {
   const [amount, setAmount] = useState(10);
-  const [gameParams, setGameParams] = useState<DiceGameParams>({
-    multiplier: 2.0,
-    winChance: 49.5,
-    target: 50.5,
-    isOver: true,
-  });
+  const [targetMultiplier, setTargetMultiplier] = useState(2.00);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [balance, setBalance] = useState(0);
   const [stats, setStats] = useState({ profit: 0, wins: 0, losses: 0, wagered: 0 });
-  const [autoBetActive, setAutoBetActive] = useState(false);
   const [fairnessModalOpen, setFairnessModalOpen] = useState(false);
 
   useEffect(() => {
@@ -48,17 +35,22 @@ export default function DicePage() {
       return;
     }
 
+    if (targetMultiplier < 1.01 || targetMultiplier > 1000000) {
+      toast.error('Target must be between 1.01x and 1,000,000x');
+      return;
+    }
+
     setLoading(true);
     try {
       const response = await betAPI.place({
-        gameType: 'DICE',
+        gameType: 'LIMBO',
         currency: 'USD',
         amount,
-        gameParams: { target: gameParams.target, isOver: gameParams.isOver },
+        gameParams: { targetMultiplier },
       });
 
       const { bet, result: gameResult } = response.data;
-      setResult(gameResult.result || gameResult);
+      setResult(gameResult);
 
       if (gameResult.won) {
         toast.success(`Won $${gameResult.profit.toFixed(2)}!`);
@@ -76,38 +68,11 @@ export default function DicePage() {
     }
   };
 
-  const handleStartAutoBet = async (config: AutoBetConfig) => {
-    try {
-      await betAPI.startAutobet({
-        gameType: 'DICE',
-        currency: 'USD',
-        amount,
-        gameParams: { target: gameParams.target, isOver: gameParams.isOver },
-        config,
-      });
-      setAutoBetActive(true);
-      toast.success('Auto-bet started');
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to start auto-bet');
-    }
-  };
-
-  const handleStopAutoBet = async () => {
-    try {
-      await betAPI.stopAutobet();
-      setAutoBetActive(false);
-      toast.success('Auto-bet stopped');
-      await loadBalance();
-    } catch (error: any) {
-      toast.error('Failed to stop auto-bet');
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-900">
       <header className="border-b border-gray-800">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold gradient-text">← Dice</Link>
+          <Link href="/" className="text-2xl font-bold gradient-text">← Limbo</Link>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setFairnessModalOpen(true)}
@@ -128,79 +93,104 @@ export default function DicePage() {
           {/* Game Area */}
           <div className="lg:col-span-2">
             <div className="card">
-              <h2 className="text-2xl font-bold mb-6">Roll the Dice</h2>
+              <h2 className="text-2xl font-bold mb-6">Limbo</h2>
 
               {/* Result Display */}
               {result && (
-                <div className={`mb-6 p-6 rounded-lg text-center ${result.won ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
-                  <div className="text-6xl font-bold mb-2">{result.roll}</div>
+                <div className={`mb-6 p-8 rounded-lg text-center ${result.won ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
+                  <div className="text-6xl font-bold mb-2">{result.result.toFixed(2)}x</div>
                   <div className="text-2xl mb-2">{result.won ? '🎉 WIN!' : '😢 LOST'}</div>
                   <div className="text-xl">
-                    {result.won ? `+$${(amount * gameParams.multiplier - amount).toFixed(2)}` : `-$${amount.toFixed(2)}`}
+                    {result.won ? `+$${(amount * targetMultiplier - amount).toFixed(2)}` : `-$${amount.toFixed(2)}`}
                   </div>
                 </div>
               )}
 
-              {/* Dice Game Controls */}
-              <DiceGameControls
-                onChange={setGameParams}
-                disabled={loading || autoBetActive}
-              />
+              {/* Target Multiplier Input */}
+              <div className="mb-6">
+                <div className="flex justify-between mb-2">
+                  <span>Target Multiplier</span>
+                  <span className="text-primary">{targetMultiplier.toFixed(2)}x</span>
+                </div>
+                <input
+                  type="number"
+                  value={targetMultiplier}
+                  onChange={(e) => setTargetMultiplier(parseFloat(e.target.value) || 1.01)}
+                  className="input w-full text-center text-2xl font-bold"
+                  min="1.01"
+                  max="1000000"
+                  step="0.01"
+                />
+                
+                {/* Quick Presets */}
+                <div className="grid grid-cols-5 gap-2 mt-4">
+                  <button onClick={() => setTargetMultiplier(1.5)} className="btn-secondary py-2">1.5x</button>
+                  <button onClick={() => setTargetMultiplier(2)} className="btn-secondary py-2">2x</button>
+                  <button onClick={() => setTargetMultiplier(5)} className="btn-secondary py-2">5x</button>
+                  <button onClick={() => setTargetMultiplier(10)} className="btn-secondary py-2">10x</button>
+                  <button onClick={() => setTargetMultiplier(100)} className="btn-secondary py-2">100x</button>
+                </div>
+              </div>
+
+              {/* Payout Display */}
+              <div className="text-center mb-6">
+                <div className="text-sm text-gray-400">Potential Payout</div>
+                <div className="text-4xl font-bold text-secondary">
+                  ${(amount * targetMultiplier).toFixed(2)}
+                </div>
+              </div>
+
+              {/* Game Info */}
+              <div className="bg-gray-800 rounded-lg p-4">
+                <h3 className="font-bold mb-2">How to Play</h3>
+                <p className="text-sm text-gray-400">
+                  Set your target multiplier and place your bet. The game will generate a random multiplier.
+                  If the result is equal to or higher than your target, you win!
+                  Higher targets = lower chance but bigger payouts.
+                </p>
+              </div>
             </div>
           </div>
 
           {/* Bet Controls */}
           <div className="space-y-6">
-            {/* Bet Mode Selector */}
+            {/* Amount Input */}
             <div className="card">
-              <BetModeSelector
-                mode={betMode}
-                onChange={setBetMode}
-                showStrategy={true}
+              <h3 className="text-xl font-bold mb-4">Bet Amount</h3>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+                className="input w-full mb-4"
+                min="0"
+                step="0.01"
               />
 
-              {/* Manual Bet */}
-              {betMode === 'manual' && (
-                <ManualBetControls
-                  amount={amount}
-                  balance={balance}
-                  onAmountChange={setAmount}
-                  onBet={placeBet}
-                  disabled={autoBetActive}
-                  loading={loading}
-                />
-              )}
+              {/* Presets */}
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                <button onClick={() => setAmount(a => a / 2)} className="btn-secondary py-2">½×</button>
+                <button onClick={() => setAmount(a => a * 2)} className="btn-secondary py-2">2×</button>
+                <button onClick={() => setAmount(balance)} className="btn-secondary py-2">Max</button>
+                <button onClick={() => setAmount(10)} className="btn-secondary py-2">Reset</button>
+              </div>
 
-              {/* Auto Bet */}
-              {betMode === 'auto' && (
-                <AutoBetControls
-                  amount={amount}
-                  balance={balance}
-                  onAmountChange={setAmount}
-                  onStart={handleStartAutoBet}
-                  onStop={handleStopAutoBet}
-                  isActive={autoBetActive}
-                  disabled={loading || amount <= 0 || amount > balance}
-                />
-              )}
-
-              {/* Strategy (Coming Soon) */}
-              {betMode === 'strategy' && (
-                <div className="text-center py-8 text-gray-400">
-                  Strategy mode coming soon...
-                </div>
-              )}
-            </div>
-
-            {/* Auto-Bet Status */}
-            {autoBetActive && (
-              <div className="card bg-blue-900/20 border border-blue-500">
-                <div className="text-center">
-                  <div className="text-sm text-gray-400 mb-1">Auto-Bet Active</div>
-                  <div className="text-lg font-bold">Running...</div>
+              {/* Profit Display */}
+              <div className="bg-gray-800 p-3 rounded-lg mb-4">
+                <div className="text-sm text-gray-400">Profit on Win</div>
+                <div className="text-xl font-bold text-special">
+                  ${(amount * targetMultiplier - amount).toFixed(2)}
                 </div>
               </div>
-            )}
+
+              {/* Bet Button */}
+              <button
+                onClick={placeBet}
+                disabled={loading || amount <= 0 || amount > balance}
+                className="btn-primary w-full py-4 text-xl disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Playing...' : `Bet $${amount.toFixed(2)}`}
+              </button>
+            </div>
 
             {/* Live Stats */}
             <div className="card">

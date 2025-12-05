@@ -60,7 +60,18 @@ export class AutoBetService {
    * Start autobet session
    */
   static async startAutoBet(userId: string, config: AutoBetConfig, betInput: Omit<PlaceBetInput, 'isAutoBet'>) {
-    await this.scheduleNextBet(userId, config, betInput, 1);
+    // Stop any existing session
+    await this.stopAutoBet(userId);
+    
+    // Store initial amount for reset functionality
+    const sessionData = {
+      ...config,
+      initialAmount: betInput.amount,
+      totalProfit: 0,
+      totalBets: 0,
+    };
+    
+    await this.scheduleNextBet(userId, sessionData, betInput, 1);
   }
 
   /**
@@ -90,30 +101,32 @@ export class AutoBetService {
   /**
    * Update config after bet based on win/loss
    */
-  private static updateConfigAfterBet(config: AutoBetConfig, won: boolean, currentAmount: number): AutoBetConfig {
+  private static updateConfigAfterBet(config: any, won: boolean, currentAmount: number): any {
     const newConfig = { ...config };
     const adjustment = won ? config.onWin : config.onLoss;
 
     if (adjustment.reset) {
-      // Reset to original amount (would need to store original)
-      return newConfig;
+      // Reset to initial amount
+      return { ...newConfig, currentAmount: config.initialAmount };
     }
 
+    let newAmount = currentAmount;
     if (adjustment.increaseBy) {
-      newConfig.onWin.increaseBy = currentAmount * (1 + adjustment.increaseBy / 100);
+      newAmount = currentAmount * (1 + adjustment.increaseBy / 100);
+    } else if (adjustment.decreaseBy) {
+      newAmount = currentAmount * (1 - adjustment.decreaseBy / 100);
     }
 
-    if (adjustment.decreaseBy) {
-      newConfig.onLoss.decreaseBy = currentAmount * (1 - adjustment.decreaseBy / 100);
-    }
-
-    return newConfig;
+    return { ...newConfig, currentAmount: newAmount };
   }
 
   /**
    * Check if autobet should stop
    */
-  private static shouldStop(config: AutoBetConfig, currentBet: number, totalProfit: number): boolean {
+  private static shouldStop(config: any, currentBet: number, profit: number): boolean {
+    // Update total profit
+    const totalProfit = (config.totalProfit || 0) + profit;
+    
     // Check bet count
     if (config.numberOfBets > 0 && currentBet >= config.numberOfBets) {
       return true;

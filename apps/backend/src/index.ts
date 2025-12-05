@@ -21,6 +21,9 @@ import adminRoutes from './routes/admin';
 import { setupCrashSocket } from './websocket/crash';
 import { setupTrenballSocket } from './websocket/trenball';
 
+// Services
+import { AutoBetService } from './services/autobet-service';
+
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
@@ -77,6 +80,10 @@ async function start() {
 
   setupCrashSocket(io);
   setupTrenballSocket(io);
+
+  // Start AutoBet worker
+  AutoBetService.startWorker();
+  console.log('✅ AutoBet worker started');
 
   // Start server
   try {

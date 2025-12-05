@@ -25,19 +25,19 @@ export class DiceGame extends BaseGame {
     const params = input.gameParams as DiceParams;
     const { target, isOver, ultimateMode } = params;
 
-    // Generate roll (0-100 with 2 decimals)
+    // Generate roll (0-100 with 2 decimals) - Stake formula
     const float = generateFloat(input.seedData);
-    const roll = parseFloat((float * 100).toFixed(2));
+    const roll = Math.floor(float * 10001) / 100;
 
-    // Determine win
+    // Determine win (pure RNG, no house edge)
     const won = isOver ? roll > target : roll < target;
 
-    // Calculate win chance
-    const rawWinChance = isOver ? (100 - target) : target;
-    const winChance = applyHouseEdge(rawWinChance, this.config.houseEdge);
+    // Calculate win chance (raw probability from 0-100 range)
+    const winChance = isOver ? (100 - target) : target;
 
-    // Calculate multiplier
-    const multiplier = won ? (100 / winChance) : 0;
+    // Calculate multiplier: (99 / winChance) with house edge
+    const baseMultiplier = 99 / winChance;
+    const multiplier = won ? baseMultiplier * (1 - this.config.houseEdge / 100) : 0;
 
     // Ultimate mode increases multiplier
     const finalMultiplier = ultimateMode && won ? multiplier * 1.1 : multiplier;

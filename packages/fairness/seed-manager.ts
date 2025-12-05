@@ -1,4 +1,4 @@
-import { prisma } from '@casino/database';
+import { prisma, Prisma } from '@casino/database';
 import { generateServerSeed, hashServerSeed, generateClientSeed } from './rng';
 
 /**
@@ -43,6 +43,38 @@ export class SeedManager {
   }
 
   /**
+   * Reserve seed for bet (atomic nonce increment within transaction)
+   * MUST be called inside a Prisma transaction
+   */
+  static async reserveSeedForBet(
+    tx: Prisma.TransactionClient,
+    userId: string
+  ) {
+    const seed = await tx.seedPair.findFirst({
+      where: { userId, isActive: true },
+    });
+
+    if (!seed) {
+      throw new Error('No active seed pair found');
+    }
+
+    const currentNonce = seed.nonce;
+
+    await tx.seedPair.update({
+      where: { id: seed.id },
+      data: { nonce: { increment: 1 } },
+    });
+
+    return {
+      seedPairId: seed.id,
+      serverSeed: seed.serverSeed,
+      clientSeed: seed.clientSeed,
+      nonce: currentNonce,
+      serverSeedHash: seed.serverSeedHash,
+    };
+  }
+
+  /**
    * Increment nonce after bet
    */
   static async incrementNonce(seedPairId: string) {
@@ -56,6 +88,17 @@ export class SeedManager {
    * Rotate to new seed pair (reveals old server seed)
    */
   static async rotateSeedPair(userId: string, newClientSeed?: string) {
+    const currentSeed = await prisma.seedPair.findFirst({
+      where: { userId, isActive: true },
+    });
+
+    if (currentSeed) {
+      const computedHash = hashServerSeed(currentSeed.serverSeed);
+      if (computedHash !== currentSeed.serverSeedHash) {
+        throw new Error('Server seed hash mismatch - integrity violation');
+      }
+    }
+
     // Deactivate current seed pair and reveal server seed
     await prisma.seedPair.updateMany({
       where: { userId, isActive: true },

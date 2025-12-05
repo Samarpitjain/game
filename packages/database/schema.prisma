@@ -123,13 +123,30 @@ model Wallet {
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   currency      Currency
   balance       Float    @default(0)
-  lockedBalance Float    @default(0)
+  lockedBalance Decimal  @default(0) @db.Decimal(24,8)
   
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   @@unique([userId, currency])
   @@index([userId])
+}
+
+model Transaction {
+  id           String   @id @default(cuid())
+  userId       String
+  walletId     String
+  amount       Decimal  @db.Decimal(24,8)
+  type         String
+  beforeAmount Decimal  @db.Decimal(24,8)
+  afterAmount  Decimal  @db.Decimal(24,8)
+  meta         Json?
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([walletId])
+  @@index([createdAt])
+  @@index([type])
 }
 
 model SeedPair {

@@ -2,6 +2,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { prisma } from '@casino/database';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
+import { SeedManager } from '@casino/fairness';
 
 const registerSchema = z.object({
   username: z.string().min(3).max(20),
@@ -55,6 +56,9 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       await prisma.userStats.create({
         data: { userId: user.id },
       });
+
+      // Create initial seed pair
+      await SeedManager.createSeedPair(user.id);
 
       // Generate token
       const token = fastify.jwt.sign({
