@@ -3,7 +3,7 @@ import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
 import websocket from '@fastify/websocket';
 import { Server } from 'socket.io';
-import { prisma } from '@casino/database';
+import { connectDB, disconnectDB } from '@casino/database';
 
 // Routes
 import authRoutes from './routes/auth';
@@ -23,11 +23,16 @@ import { setupTrenballSocket } from './websocket/trenball';
 
 // Services
 import { AutoBetService } from './services/autobet-service';
+import { socketManager } from './services/socket-manager';
 
 const PORT = process.env.PORT || 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 async function start() {
+  // Connect to MongoDB
+  await connectDB();
+  console.log('✅ MongoDB connected');
+
   const fastify = Fastify({
     logger: true,
   });
@@ -70,22 +75,7 @@ async function start() {
   fastify.register(leaderboardRoutes, { prefix: '/api/leaderboard' });
   fastify.register(adminRoutes, { prefix: '/api/admin' });
 
-  // Setup Socket.IO for multiplayer games
-  const io = new Server(fastify.server, {
-    cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-      credentials: true,
-    },
-  });
-
-  setupCrashSocket(io);
-  setupTrenballSocket(io);
-
-  // Start AutoBet worker
-  AutoBetService.startWorker();
-  console.log('✅ AutoBet worker started');
-
-  // Start server
+  // Start server FIRST
   try {
     await fastify.listen({ port: PORT as number, host: '0.0.0.0' });
     console.log(`🚀 Server running on http://localhost:${PORT}`);
@@ -94,10 +84,44 @@ async function start() {
     process.exit(1);
   }
 
+  // Setup Socket.IO AFTER server starts
+  const io = new Server(fastify.server, {
+    cors: {
+      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+      credentials: true,
+    },
+    path: '/socket.io/',
+    transports: ['websocket', 'polling'],
+  });
+
+  // Initialize Socket Manager
+  socketManager.setIO(io);
+  console.log('✅ Socket.IO initialized');
+
+  // User room management
+  io.on('connection', (socket) => {
+    const userId = socket.handshake.query.userId as string;
+    if (userId) {
+      socket.join(`user:${userId}`);
+      console.log(`✅ User ${userId} connected to socket`);
+    }
+
+    socket.on('disconnect', () => {
+      console.log(`❌ User ${userId} disconnected from socket`);
+    });
+  });
+
+  setupCrashSocket(io);
+  setupTrenballSocket(io);
+
+  // Start AutoBet worker
+  await AutoBetService.startWorker();
+  console.log('✅ AutoBet worker started');
+
   // Graceful shutdown
   process.on('SIGTERM', async () => {
     await fastify.close();
-    await prisma.$disconnect();
+    await disconnectDB();
     process.exit(0);
   });
 }

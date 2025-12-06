@@ -1,4 +1,5 @@
-import { prisma, BetStatus, GameType, Currency, Prisma } from '@casino/database';
+import { Bet, BetStatus, GameType, Currency, UserStats } from '@casino/database';
+import mongoose from 'mongoose';
 import { gameRegistry } from '@casino/game-engine';
 import { SeedManager } from '@casino/fairness';
 import { WalletService } from './wallet-service';
@@ -31,86 +32,70 @@ export class BetEngine {
       throw new Error('Bet amount must be positive');
     }
 
-    // Ensure seed pair exists BEFORE transaction
     await SeedManager.getActiveSeedPair(userId);
 
-    const betResult = await prisma.$transaction(
-      async (tx) => {
-        const seedData = await SeedManager.reserveSeedForBet(tx, userId);
+    // Get seed data
+    const seedData = await SeedManager.reserveSeedForBetNoTx(userId);
 
-        let walletId: string | undefined;
-        if (!isDemo) {
-          const wallet = await WalletService.debitAndLockBalance(tx, userId, currency, amount);
-          walletId = wallet.id;
-        }
+    let walletId: string | undefined;
+    if (!isDemo) {
+      const wallet = await WalletService.debitBalance(userId, currency, amount);
+      walletId = wallet._id.toString();
+    }
 
-        const game = gameRegistry.getGame(gameType);
-        const result = game.play({
-          amount,
-          currency,
-          seedData: {
-            serverSeed: seedData.serverSeed,
-            clientSeed: seedData.clientSeed,
-            nonce: seedData.nonce,
-          },
-          gameParams,
-        });
-
-        const status = result.won ? BetStatus.WON : BetStatus.LOST;
-
-        const bet = await tx.bet.create({
-          data: {
-            userId,
-            gameType,
-            currency,
-            amount,
-            multiplier: result.multiplier,
-            payout: result.payout,
-            profit: result.profit,
-            status,
-            seedPairId: seedData.seedPairId,
-            nonce: seedData.nonce,
-            gameData: gameParams as any,
-            result: result.result as any,
-            isDemo: isDemo || false,
-            isAutoBet: isAutoBet || false,
-            strategyId,
-          },
-        });
-
-        if (!isDemo && walletId) {
-          if (result.won) {
-            await WalletService.creditAndUnlockBalance(tx, userId, walletId, currency, amount, result.payout);
-          } else {
-            await WalletService.releaseLockOnLoss(tx, userId, walletId, currency, amount);
-          }
-
-          await tx.userStats.upsert({
-            where: { userId },
-            create: {
-              userId,
-              totalWagered: amount,
-              totalProfit: result.profit,
-              totalWins: result.won ? 1 : 0,
-              totalLosses: result.won ? 0 : 1,
-            },
-            update: {
-              totalWagered: { increment: amount },
-              totalProfit: { increment: result.profit },
-              totalWins: result.won ? { increment: 1 } : undefined,
-              totalLosses: result.won ? undefined : { increment: 1 },
-            },
-          });
-        }
-
-        return { bet, result };
+    const game = gameRegistry.getGame(gameType);
+    const result = game.play({
+      amount,
+      currency,
+      seedData: {
+        serverSeed: seedData.serverSeed,
+        clientSeed: seedData.clientSeed,
+        nonce: seedData.nonce,
       },
-      {
-        maxWait: 5000,
-        timeout: 10000,
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      gameParams,
+    });
+
+    const status = result.won ? BetStatus.WON : BetStatus.LOST;
+
+    const bet = await Bet.create({
+      userId,
+      gameType,
+      currency,
+      amount,
+      multiplier: result.multiplier,
+      payout: result.payout,
+      profit: result.profit,
+      status,
+      seedPairId: seedData.seedPairId,
+      nonce: seedData.nonce,
+      gameData: gameParams,
+      result: result.result,
+      isDemo: isDemo || false,
+      isAutoBet: isAutoBet || false,
+      strategyId,
+    });
+
+    if (!isDemo && walletId) {
+      if (result.won) {
+        await WalletService.creditBalance(userId, walletId, currency, result.payout);
       }
-    );
+
+      await UserStats.findOneAndUpdate(
+        { userId },
+        {
+          $inc: {
+            totalWagered: amount,
+            totalProfit: result.profit,
+            totalWins: result.won ? 1 : 0,
+            totalLosses: result.won ? 0 : 1,
+          },
+          $setOnInsert: { userId }
+        },
+        { upsert: true }
+      );
+    }
+
+    const betResult = { bet, result };
 
     const wallet = isDemo ? null : await WalletService.getWallet(userId, currency);
 
@@ -142,122 +127,60 @@ export class BetEngine {
    * Get bet history
    */
   static async getBetHistory(userId: string, limit = 50, offset = 0) {
-    return prisma.bet.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      skip: offset,
-      include: {
-        seedPair: {
-          select: {
-            serverSeedHash: true,
-            clientSeed: true,
-            nonce: true,
-            revealed: true,
-            serverSeed: true,
-          },
-        },
-      },
-    });
+    return Bet.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(offset)
+      .populate('seedPairId', 'serverSeedHash clientSeed nonce revealed serverSeed');
   }
 
   /**
    * Get bet by ID
    */
   static async getBetById(betId: string) {
-    return prisma.bet.findUnique({
-      where: { id: betId },
-      include: {
-        seedPair: true,
-        user: {
-          select: {
-            username: true,
-          },
-        },
-      },
-    });
+    return Bet.findById(betId)
+      .populate('seedPairId')
+      .populate('userId', 'username');
   }
 
   /**
    * Get all bets (for leaderboard)
    */
   static async getAllBets(limit = 50, offset = 0) {
-    return prisma.bet.findMany({
-      where: { isDemo: false },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      skip: offset,
-      include: {
-        user: {
-          select: {
-            username: true,
-          },
-        },
-      },
-    });
+    return Bet.find({ isDemo: false })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(offset)
+      .populate('userId', 'username');
   }
 
   /**
    * Get high roller bets
    */
   static async getHighRollers(currency: Currency, limit = 50) {
-    return prisma.bet.findMany({
-      where: {
-        currency,
-        isDemo: false,
-      },
-      orderBy: { amount: 'desc' },
-      take: limit,
-      include: {
-        user: {
-          select: {
-            username: true,
-          },
-        },
-      },
-    });
+    return Bet.find({ currency, isDemo: false })
+      .sort({ amount: -1 })
+      .limit(limit)
+      .populate('userId', 'username');
   }
 
   /**
    * Get big wins
    */
   static async getBigWins(currency: Currency, limit = 50) {
-    return prisma.bet.findMany({
-      where: {
-        currency,
-        status: BetStatus.WON,
-        isDemo: false,
-      },
-      orderBy: { payout: 'desc' },
-      take: limit,
-      include: {
-        user: {
-          select: {
-            username: true,
-          },
-        },
-      },
-    });
+    return Bet.find({ currency, status: BetStatus.WON, isDemo: false })
+      .sort({ payout: -1 })
+      .limit(limit)
+      .populate('userId', 'username');
   }
 
   /**
    * Get lucky wins (highest multiplier)
    */
   static async getLuckyWins(limit = 50) {
-    return prisma.bet.findMany({
-      where: {
-        status: BetStatus.WON,
-        isDemo: false,
-      },
-      orderBy: { multiplier: 'desc' },
-      take: limit,
-      include: {
-        user: {
-          select: {
-            username: true,
-          },
-        },
-      },
-    });
+    return Bet.find({ status: BetStatus.WON, isDemo: false })
+      .sort({ multiplier: -1 })
+      .limit(limit)
+      .populate('userId', 'username');
   }
 }

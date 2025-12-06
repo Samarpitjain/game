@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import { prisma } from '@casino/database';
+import { User, UserSettings, UserStats } from '@casino/database';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { SeedManager } from '@casino/fairness';
@@ -22,13 +22,11 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const body = registerSchema.parse(request.body);
 
       // Check if user exists
-      const existing = await prisma.user.findFirst({
-        where: {
-          OR: [
-            { email: body.email },
-            { username: body.username },
-          ],
-        },
+      const existing = await User.findOne({
+        $or: [
+          { email: body.email },
+          { username: body.username },
+        ],
       });
 
       if (existing) {
@@ -39,26 +37,20 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const passwordHash = await bcrypt.hash(body.password, 10);
 
       // Create user
-      const user = await prisma.user.create({
-        data: {
-          username: body.username,
-          email: body.email,
-          passwordHash,
-        },
+      const user = await User.create({
+        username: body.username,
+        email: body.email,
+        passwordHash,
       });
 
       // Create default settings
-      await prisma.userSettings.create({
-        data: { userId: user.id },
-      });
+      await UserSettings.create({ userId: user._id });
 
       // Create default stats
-      await prisma.userStats.create({
-        data: { userId: user.id },
-      });
+      await UserStats.create({ userId: user._id });
 
       // Create initial seed pair
-      await SeedManager.createSeedPair(user.id);
+      await SeedManager.createSeedPair(user._id.toString());
 
       // Generate token
       const token = fastify.jwt.sign({
@@ -70,7 +62,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         token,
         user: {
-          id: user.id,
+          id: user._id.toString(),
           username: user.username,
           email: user.email,
           role: user.role,
@@ -90,9 +82,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       const body = loginSchema.parse(request.body);
 
       // Find user
-      const user = await prisma.user.findUnique({
-        where: { email: body.email },
-      });
+      const user = await User.findOne({ email: body.email });
 
       if (!user) {
         return reply.code(401).send({ error: 'Invalid credentials' });
@@ -115,7 +105,7 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
       return {
         token,
         user: {
-          id: user.id,
+          id: user._id.toString(),
           username: user.username,
           email: user.email,
           role: user.role,
@@ -136,15 +126,12 @@ const authRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get('/me', {
     onRequest: [fastify.authenticate],
   }, async (request) => {
-    const user = await prisma.user.findUnique({
-      where: { id: (request.user as any).id },
-      include: {
-        settings: true,
-        stats: true,
-      },
-    });
+    const userId = (request.user as any).id;
+    const user = await User.findById(userId).lean();
+    const settings = await UserSettings.findOne({ userId }).lean();
+    const stats = await UserStats.findOne({ userId }).lean();
 
-    return user;
+    return { ...user, settings, stats };
   });
 };
 

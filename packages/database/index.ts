@@ -1,13 +1,26 @@
-import { PrismaClient } from '@prisma/client';
+import mongoose from 'mongoose';
 
-const globalForPrisma = global as unknown as { prisma: PrismaClient };
+const MONGODB_URI = process.env.DATABASE_URL || 'mongodb://localhost:27017/casinobit';
 
-export const prisma =
-  globalForPrisma.prisma ||
-  new PrismaClient({
-    log: process.env.NODE_ENV === 'development' ? ['query', 'error', 'warn'] : ['error'],
-  });
+let isConnected = false;
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = prisma;
+export const connectDB = async () => {
+  if (isConnected) return;
 
-export * from '@prisma/client';
+  try {
+    await mongoose.connect(MONGODB_URI);
+    isConnected = true;
+    console.log('MongoDB connected');
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    throw error;
+  }
+};
+
+export const disconnectDB = async () => {
+  if (!isConnected) return;
+  await mongoose.disconnect();
+  isConnected = false;
+};
+
+export * from './schemas';

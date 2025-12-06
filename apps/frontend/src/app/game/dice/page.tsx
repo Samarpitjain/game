@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { betAPI, walletAPI } from '@/lib/api';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { useAutoBetSocket } from '@/hooks/useAutoBetSocket';
 import BetModeSelector from '@/components/betting/BetModeSelector';
 import ManualBetControls from '@/components/betting/ManualBetControls';
 import AutoBetControls, { AutoBetConfig } from '@/components/betting/AutoBetControls';
@@ -27,10 +28,39 @@ export default function DicePage() {
   const [stats, setStats] = useState({ profit: 0, wins: 0, losses: 0, wagered: 0 });
   const [autoBetActive, setAutoBetActive] = useState(false);
   const [fairnessModalOpen, setFairnessModalOpen] = useState(false);
+  const [userId, setUserId] = useState<string>();
 
   useEffect(() => {
     loadBalance();
+    const token = localStorage.getItem('token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      setUserId(payload.id);
+    }
   }, []);
+
+  // Socket.IO for AutoBet
+  useAutoBetSocket(userId, (data) => {
+    console.log('AutoBet result:', data);
+    setResult(data.bet.result);
+    if (data.wallet) setBalance(data.wallet.balance);
+    
+    if (data.bet.won) {
+      setStats(s => ({ 
+        ...s, 
+        wins: s.wins + 1, 
+        profit: s.profit + data.bet.profit, 
+        wagered: s.wagered + data.bet.amount 
+      }));
+    } else {
+      setStats(s => ({ 
+        ...s, 
+        losses: s.losses + 1, 
+        profit: s.profit + data.bet.profit, 
+        wagered: s.wagered + data.bet.amount 
+      }));
+    }
+  });
 
   const loadBalance = async () => {
     try {
@@ -86,7 +116,7 @@ export default function DicePage() {
         config,
       });
       setAutoBetActive(true);
-      toast.success('Auto-bet started');
+      toast.success('Auto-bet started - Real-time updates enabled');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to start auto-bet');
     }

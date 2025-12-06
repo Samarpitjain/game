@@ -1,6 +1,6 @@
 import { Server, Socket } from 'socket.io';
 import { CrashGame } from '@casino/game-engine';
-import { prisma } from '@casino/database';
+import { CrashRound, CrashBet } from '@casino/database';
 import { generateServerSeed, generateClientSeed } from '@casino/fairness';
 
 interface CrashBet {
@@ -108,21 +108,17 @@ export function setupCrashSocket(io: Server) {
       nonce: roundNumber,
     });
 
-    // Save round to database (upsert to avoid duplicate errors)
-    prisma.crashRound.upsert({
-      where: { roundNumber },
-      create: {
+    // Save round to database
+    CrashRound.findOneAndUpdate(
+      { roundNumber },
+      {
         roundNumber,
         crashPoint,
         hash: serverSeed,
         startedAt: new Date(),
       },
-      update: {
-        crashPoint,
-        hash: serverSeed,
-        startedAt: new Date(),
-      },
-    }).catch(console.error);
+      { upsert: true, new: true }
+    ).catch(console.error);
 
     crashNamespace.emit('round-starting', {
       roundNumber,
@@ -198,29 +194,24 @@ export function setupCrashSocket(io: Server) {
   }
 
   async function saveBets() {
-    for (const bet of bets) {
-      try {
-        const round = await prisma.crashRound.findUnique({
-          where: { roundNumber },
-        });
+    try {
+      const round = await CrashRound.findOne({ roundNumber });
+      if (!round) return;
 
-        if (round) {
-          await prisma.crashBet.create({
-            data: {
-              roundId: round.id,
-              userId: bet.userId,
-              currency: bet.currency as any,
-              amount: bet.amount,
-              autoCashout: bet.autoCashout,
-              cashedOut: bet.cashedOut,
-              cashoutAt: bet.cashoutAt,
-              payout: bet.payout,
-            },
-          });
-        }
-      } catch (error) {
-        console.error('Error saving crash bet:', error);
-      }
+      const crashBets = bets.map(bet => ({
+        roundId: round._id,
+        userId: bet.userId,
+        currency: bet.currency,
+        amount: bet.amount,
+        autoCashout: bet.autoCashout,
+        cashedOut: bet.cashedOut,
+        cashoutAt: bet.cashoutAt,
+        payout: bet.payout,
+      }));
+
+      await CrashBet.insertMany(crashBets);
+    } catch (error) {
+      console.error('Error saving crash bets:', error);
     }
   }
 }
