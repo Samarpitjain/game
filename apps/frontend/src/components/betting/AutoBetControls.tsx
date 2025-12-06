@@ -40,17 +40,27 @@ export default function AutoBetControls({ amount, balance, onAmountChange, onSta
     const config: any = {
       enabled: true,
       numberOfBets,
-      onWin: {
+    };
+    
+    // Only add advanced settings if advanced mode is enabled
+    if (showAdvanced) {
+      config.onWin = {
         reset: onWinAction === 'reset',
         increaseBy: onWinAction === 'increase' ? onWinValue : undefined,
-      },
-      onLoss: {
+      };
+      config.onLoss = {
         reset: onLossAction === 'reset',
         increaseBy: onLossAction === 'increase' ? onLossValue : undefined,
-      },
-      stopOnProfit,
-      stopOnLoss,
-    };
+      };
+      
+      if (stopOnProfit > 0) {
+        config.stopOnProfit = stopOnProfit;
+      }
+      if (stopOnLoss > 0) {
+        config.stopOnLoss = stopOnLoss;
+      }
+    }
+    
     onStart(config);
   };
 

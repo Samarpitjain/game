@@ -24,6 +24,16 @@ export default function WalletPage() {
     }
   };
 
+  const addDemoBalance = async (currency: string) => {
+    try {
+      await walletAPI.addBalance(currency, 10000);
+      toast.success(`Added 10,000 ${currency} demo balance!`);
+      loadWallets();
+    } catch (error) {
+      toast.error('Failed to add balance');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -41,7 +51,13 @@ export default function WalletPage() {
       </header>
 
       <div className="container mx-auto px-4 py-12">
-        <h1 className="text-4xl font-bold gradient-text mb-8">My Wallet</h1>
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-4xl font-bold gradient-text">My Wallet</h1>
+          <div className="flex gap-2">
+            <button onClick={() => addDemoBalance('USD')} className="btn-secondary">+ $10K USD</button>
+            <button onClick={() => addDemoBalance('BTC')} className="btn-secondary">+ 1 BTC</button>
+          </div>
+        </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
           {wallets.map((wallet) => (

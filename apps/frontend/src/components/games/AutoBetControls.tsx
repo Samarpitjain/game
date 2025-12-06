@@ -86,7 +86,7 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
   };
 
   const handleStart = () => {
-    const config: AutoBetConfig = {
+    const config: any = {
       enabled: true,
       numberOfBets,
       onWin: {
@@ -97,9 +97,15 @@ export default function AutoBetControls({ onStart, onStop, isActive, disabled }:
         reset: onLossAction === 'reset',
         increaseBy: onLossAction === 'increase' ? onLossPercent : undefined,
       },
-      stopOnProfit,
-      stopOnLoss,
     };
+    
+    // Only add stop conditions if they are set
+    if (stopOnProfit && stopOnProfit > 0) {
+      config.stopOnProfit = stopOnProfit;
+    }
+    if (stopOnLoss && stopOnLoss > 0) {
+      config.stopOnLoss = stopOnLoss;
+    }
     
     onStart(config);
   };

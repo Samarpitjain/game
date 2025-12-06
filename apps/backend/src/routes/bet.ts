@@ -23,12 +23,12 @@ const autoBetSchema = z.object({
       reset: z.boolean(),
       increaseBy: z.number().optional(),
       decreaseBy: z.number().optional(),
-    }),
+    }).optional(),
     onLoss: z.object({
       reset: z.boolean(),
       increaseBy: z.number().optional(),
       decreaseBy: z.number().optional(),
-    }),
+    }).optional(),
     stopOnProfit: z.number().optional(),
     stopOnLoss: z.number().optional(),
   }),
@@ -106,7 +106,7 @@ const betRoutes: FastifyPluginAsync = async (fastify) => {
     const userId = (request.user as any).id;
     const { limit = 50, offset = 0 } = request.query as any;
     
-    return BetEngine.getBetHistory(userId, limit, offset);
+    return BetEngine.getBetHistory(userId, parseInt(limit) || 50, parseInt(offset) || 0);
   });
 
   // Get bet by ID

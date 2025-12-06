@@ -44,7 +44,7 @@ export const betAPI = {
 export const walletAPI = {
   getAll: () => api.get('/wallet'),
   get: (currency: string) => api.get(`/wallet/${currency}`),
-  add: (currency: string, amount: number) =>
+  addBalance: (currency: string, amount: number) =>
     api.post('/wallet/add', { currency, amount }),
 };
 

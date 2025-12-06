@@ -1,5 +1,6 @@
-import { prisma, Currency, Prisma } from '@casino/database';
+import { Wallet, Currency, Transaction } from '@casino/database';
 import Decimal from 'decimal.js';
+import mongoose from 'mongoose';
 
 /**
  * Wallet Service - manages user balances
@@ -9,23 +10,14 @@ export class WalletService {
    * Get or create wallet for user
    */
   static async getWallet(userId: string, currency: Currency) {
-    let wallet = await prisma.wallet.findUnique({
-      where: {
-        userId_currency: {
-          userId,
-          currency,
-        },
-      },
-    });
+    let wallet = await Wallet.findOne({ userId, currency });
 
     if (!wallet) {
-      wallet = await prisma.wallet.create({
-        data: {
-          userId,
-          currency,
-          balance: 0,
-          lockedBalance: 0,
-        },
+      wallet = await Wallet.create({
+        userId,
+        currency,
+        balance: 0,
+        lockedBalance: 0,
       });
     }
 
@@ -36,52 +28,44 @@ export class WalletService {
    * Debit balance and lock funds (atomic, within transaction)
    */
   static async debitAndLockBalance(
-    tx: Prisma.TransactionClient,
+    session: mongoose.ClientSession,
     userId: string,
     currency: Currency,
     amount: number
   ) {
     const amountDecimal = new Decimal(amount);
-    const wallet = await tx.wallet.findUnique({
-      where: { userId_currency: { userId, currency } },
-    });
+    const wallet = await Wallet.findOne({ userId, currency }).session(session);
     if (!wallet) throw new Error(`Wallet not found for ${currency}`);
 
     const currentBalance = new Decimal(wallet.balance);
-    const currentLocked = new Decimal(wallet.lockedBalance.toString());
+    const currentLocked = new Decimal(wallet.lockedBalance);
     if (currentBalance.lessThan(amountDecimal)) throw new Error('Insufficient balance');
 
     const newBalance = currentBalance.minus(amountDecimal);
     const newLocked = currentLocked.plus(amountDecimal);
 
-    const updated = await tx.wallet.update({
-      where: { id: wallet.id },
-      data: {
-        balance: newBalance.toNumber(),
-        lockedBalance: newLocked.toString(),
-      },
-    });
+    wallet.balance = newBalance.toNumber();
+    wallet.lockedBalance = newLocked.toNumber();
+    await wallet.save({ session });
 
-    await tx.transaction.create({
-      data: {
-        userId,
-        walletId: wallet.id,
-        amount: amountDecimal.toString(),
-        type: 'bet-reserve',
-        beforeAmount: currentBalance.toString(),
-        afterAmount: newBalance.toString(),
-        meta: { currency },
-      },
-    });
+    await Transaction.create([{
+      userId,
+      walletId: wallet._id,
+      amount: amountDecimal.toNumber(),
+      type: 'bet-reserve',
+      beforeAmount: currentBalance.toNumber(),
+      afterAmount: newBalance.toNumber(),
+      meta: { currency },
+    }], { session });
 
-    return updated;
+    return wallet;
   }
 
   /**
    * Credit payout and unlock funds (atomic, within transaction)
    */
   static async creditAndUnlockBalance(
-    tx: Prisma.TransactionClient,
+    session: mongoose.ClientSession,
     userId: string,
     walletId: string,
     currency: Currency,
@@ -90,83 +74,71 @@ export class WalletService {
   ) {
     const betDecimal = new Decimal(betAmount);
     const payoutDecimal = new Decimal(payoutAmount);
-    const wallet = await tx.wallet.findUnique({ where: { id: walletId } });
+    const wallet = await Wallet.findById(walletId).session(session);
     if (!wallet) throw new Error('Wallet not found');
 
     const currentBalance = new Decimal(wallet.balance);
-    const currentLocked = new Decimal(wallet.lockedBalance.toString());
+    const currentLocked = new Decimal(wallet.lockedBalance);
     const newBalance = currentBalance.plus(payoutDecimal);
     const newLocked = currentLocked.minus(betDecimal);
 
-    const updated = await tx.wallet.update({
-      where: { id: walletId },
-      data: {
-        balance: newBalance.toNumber(),
-        lockedBalance: newLocked.toString(),
-      },
-    });
+    wallet.balance = newBalance.toNumber();
+    wallet.lockedBalance = newLocked.toNumber();
+    await wallet.save({ session });
 
-    await tx.transaction.create({
-      data: {
-        userId,
-        walletId,
-        amount: payoutDecimal.toString(),
-        type: 'payout',
-        beforeAmount: currentBalance.toString(),
-        afterAmount: newBalance.toString(),
-        meta: { currency, betAmount, payoutAmount },
-      },
-    });
+    await Transaction.create([{
+      userId,
+      walletId,
+      amount: payoutDecimal.toNumber(),
+      type: 'payout',
+      beforeAmount: currentBalance.toNumber(),
+      afterAmount: newBalance.toNumber(),
+      meta: { currency, betAmount, payoutAmount },
+    }], { session });
 
-    return updated;
+    return wallet;
   }
 
   /**
    * Release locked balance on loss (atomic, within transaction)
    */
   static async releaseLockOnLoss(
-    tx: Prisma.TransactionClient,
+    session: mongoose.ClientSession,
     userId: string,
     walletId: string,
     currency: Currency,
     amount: number
   ) {
     const amountDecimal = new Decimal(amount);
-    const wallet = await tx.wallet.findUnique({ where: { id: walletId } });
+    const wallet = await Wallet.findById(walletId).session(session);
     if (!wallet) throw new Error('Wallet not found');
 
     const currentBalance = new Decimal(wallet.balance);
-    const currentLocked = new Decimal(wallet.lockedBalance.toString());
+    const currentLocked = new Decimal(wallet.lockedBalance);
     const newLocked = currentLocked.minus(amountDecimal);
     if (newLocked.lessThan(0)) throw new Error('Invalid locked balance state');
 
-    const updated = await tx.wallet.update({
-      where: { id: walletId },
-      data: { lockedBalance: newLocked.toString() },
-    });
+    wallet.lockedBalance = newLocked.toNumber();
+    await wallet.save({ session });
 
-    await tx.transaction.create({
-      data: {
-        userId,
-        walletId,
-        amount: amountDecimal.negated().toString(),
-        type: 'bet-loss',
-        beforeAmount: currentBalance.toString(),
-        afterAmount: currentBalance.toString(),
-        meta: { currency, lostAmount: amount },
-      },
-    });
+    await Transaction.create([{
+      userId,
+      walletId,
+      amount: amountDecimal.negated().toNumber(),
+      type: 'bet-loss',
+      beforeAmount: currentBalance.toNumber(),
+      afterAmount: currentBalance.toNumber(),
+      meta: { currency, lostAmount: amount },
+    }], { session });
 
-    return updated;
+    return wallet;
   }
 
   /**
    * Get all wallets for user
    */
   static async getAllWallets(userId: string) {
-    return prisma.wallet.findMany({
-      where: { userId },
-    });
+    return Wallet.find({ userId });
   }
 
   /**
@@ -174,13 +146,8 @@ export class WalletService {
    */
   static async addBalance(userId: string, currency: Currency, amount: number) {
     const wallet = await this.getWallet(userId, currency);
-
-    return prisma.wallet.update({
-      where: { id: wallet.id },
-      data: {
-        balance: { increment: amount },
-      },
-    });
+    wallet.balance += amount;
+    return wallet.save();
   }
 
   /**
@@ -193,12 +160,8 @@ export class WalletService {
       throw new Error('Insufficient balance');
     }
 
-    return prisma.wallet.update({
-      where: { id: wallet.id },
-      data: {
-        balance: { decrement: amount },
-      },
-    });
+    wallet.balance -= amount;
+    return wallet.save();
   }
 
   /**
@@ -211,13 +174,9 @@ export class WalletService {
       throw new Error('Insufficient balance');
     }
 
-    return prisma.wallet.update({
-      where: { id: wallet.id },
-      data: {
-        balance: { decrement: amount },
-        lockedBalance: { increment: amount },
-      },
-    });
+    wallet.balance -= amount;
+    wallet.lockedBalance += amount;
+    return wallet.save();
   }
 
   /**
@@ -225,13 +184,8 @@ export class WalletService {
    */
   static async unlockBalance(userId: string, currency: Currency, amount: number) {
     const wallet = await this.getWallet(userId, currency);
-
-    return prisma.wallet.update({
-      where: { id: wallet.id },
-      data: {
-        lockedBalance: { decrement: amount },
-      },
-    });
+    wallet.lockedBalance -= amount;
+    return wallet.save();
   }
 
   /**
@@ -240,6 +194,28 @@ export class WalletService {
   static async getAvailableBalance(userId: string, currency: Currency): Promise<number> {
     const wallet = await this.getWallet(userId, currency);
     return wallet.balance;
+  }
+
+  /**
+   * Debit balance (no transaction)
+   */
+  static async debitBalance(userId: string, currency: Currency, amount: number) {
+    const wallet = await this.getWallet(userId, currency);
+    if (wallet.balance < amount) throw new Error('Insufficient balance');
+    
+    wallet.balance -= amount;
+    return wallet.save();
+  }
+
+  /**
+   * Credit balance (no transaction)
+   */
+  static async creditBalance(userId: string, walletId: string, currency: Currency, amount: number) {
+    const wallet = await Wallet.findById(walletId);
+    if (!wallet) throw new Error('Wallet not found');
+    
+    wallet.balance += amount;
+    return wallet.save();
   }
 
   /**
@@ -253,31 +229,24 @@ export class WalletService {
     rate: number
   ) {
     const convertedAmount = amount * rate;
-
-    await prisma.$transaction([
-      prisma.wallet.update({
-        where: {
-          userId_currency: {
-            userId,
-            currency: fromCurrency,
-          },
-        },
-        data: {
-          balance: { decrement: amount },
-        },
-      }),
-      prisma.wallet.update({
-        where: {
-          userId_currency: {
-            userId,
-            currency: toCurrency,
-          },
-        },
-        data: {
-          balance: { increment: convertedAmount },
-        },
-      }),
-    ]);
+    const session = await mongoose.startSession();
+    
+    try {
+      await session.withTransaction(async () => {
+        const fromWallet = await Wallet.findOne({ userId, currency: fromCurrency }).session(session);
+        const toWallet = await Wallet.findOne({ userId, currency: toCurrency }).session(session);
+        
+        if (!fromWallet || !toWallet) throw new Error('Wallet not found');
+        
+        fromWallet.balance -= amount;
+        toWallet.balance += convertedAmount;
+        
+        await fromWallet.save({ session });
+        await toWallet.save({ session });
+      });
+    } finally {
+      session.endSession();
+    }
 
     return convertedAmount;
   }
