@@ -1,8 +1,9 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router } from 'express';
 import { User, UserSettings, UserStats } from '@casino/database';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
 import { SeedManager } from '@casino/fairness';
+import { authenticate, generateToken, AuthRequest } from '../middleware/auth';
 
 const registerSchema = z.object({
   username: z.string().min(3).max(20),
@@ -15,124 +16,114 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
-const authRoutes: FastifyPluginAsync = async (fastify) => {
-  // Register
-  fastify.post('/register', async (request, reply) => {
-    try {
-      const body = registerSchema.parse(request.body);
+const router = Router();
 
-      // Check if user exists
-      const existing = await User.findOne({
-        $or: [
-          { email: body.email },
-          { username: body.username },
-        ],
-      });
+// Register
+router.post('/register', async (req, res) => {
+  try {
+    const body = registerSchema.parse(req.body);
 
-      if (existing) {
-        return reply.code(400).send({ error: 'User already exists' });
-      }
+    const existing = await User.findOne({
+      $or: [
+        { email: body.email },
+        { username: body.username },
+      ],
+    });
 
-      // Hash password
-      const passwordHash = await bcrypt.hash(body.password, 10);
-
-      // Create user
-      const user = await User.create({
-        username: body.username,
-        email: body.email,
-        passwordHash,
-      });
-
-      // Create default settings
-      await UserSettings.create({ userId: user._id });
-
-      // Create default stats
-      await UserStats.create({ userId: user._id });
-
-      // Create initial seed pair
-      await SeedManager.createSeedPair(user._id.toString());
-
-      // Generate token
-      const token = fastify.jwt.sign({
-        id: user.id,
-        username: user.username,
-        role: user.role,
-      });
-
-      return {
-        token,
-        user: {
-          id: user._id.toString(),
-          username: user.username,
-          email: user.email,
-          role: user.role,
-        },
-      };
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return reply.code(400).send({ error: error.errors });
-      }
-      throw error;
+    if (existing) {
+      return res.status(400).json({ error: 'User already exists' });
     }
-  });
 
-  // Login
-  fastify.post('/login', async (request, reply) => {
-    try {
-      const body = loginSchema.parse(request.body);
+    const passwordHash = await bcrypt.hash(body.password, 10);
 
-      // Find user
-      const user = await User.findOne({ email: body.email });
+    const user = await User.create({
+      username: body.username,
+      email: body.email,
+      passwordHash,
+    });
 
-      if (!user) {
-        return reply.code(401).send({ error: 'Invalid credentials' });
-      }
+    await UserSettings.create({ userId: user._id });
+    await UserStats.create({ userId: user._id });
+    await SeedManager.createSeedPair(user._id.toString());
 
-      // Verify password
-      const valid = await bcrypt.compare(body.password, user.passwordHash);
+    const token = generateToken({
+      id: user._id.toString(),
+      username: user.username,
+      role: user.role,
+    });
 
-      if (!valid) {
-        return reply.code(401).send({ error: 'Invalid credentials' });
-      }
-
-      // Generate token
-      const token = fastify.jwt.sign({
-        id: user.id,
+    return res.json({
+      token,
+      user: {
+        id: user._id.toString(),
         username: user.username,
+        email: user.email,
         role: user.role,
-      });
-
-      return {
-        token,
-        user: {
-          id: user._id.toString(),
-          username: user.username,
-          email: user.email,
-          role: user.role,
-          isVip: user.isVip,
-          isPremium: user.isPremium,
-          level: user.level,
-        },
-      };
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return reply.code(400).send({ error: error.errors });
-      }
-      throw error;
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors });
     }
-  });
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
-  // Get current user
-  fastify.get('/me', {
-    onRequest: [fastify.authenticate],
-  }, async (request) => {
-    const userId = (request.user as any).id;
+// Login
+router.post('/login', async (req, res) => {
+  try {
+    const body = loginSchema.parse(req.body);
+
+    const user = await User.findOne({ email: body.email });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const valid = await bcrypt.compare(body.password, user.passwordHash);
+
+    if (!valid) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    const token = generateToken({
+      id: user._id.toString(),
+      username: user.username,
+      role: user.role,
+    });
+
+    return res.json({
+      token,
+      user: {
+        id: user._id.toString(),
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        isVip: user.isVip,
+        isPremium: user.isPremium,
+        level: user.level,
+      },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors });
+    }
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get current user
+router.get('/me', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.user.id;
     const user = await User.findById(userId).lean();
     const settings = await UserSettings.findOne({ userId }).lean();
     const stats = await UserStats.findOne({ userId }).lean();
 
-    return { ...user, settings, stats };
-  });
-};
+    return res.json({ ...user, settings, stats });
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
-export default authRoutes;
+export default router;

@@ -1,7 +1,8 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router } from 'express';
 import { BetEngine } from '../services/bet-engine';
 import { AutoBetService } from '../services/autobet-service';
 import { z } from 'zod';
+import { authenticate, AuthRequest } from '../middleware/auth';
 
 const placeBetSchema = z.object({
   gameType: z.string(),
@@ -34,86 +35,79 @@ const autoBetSchema = z.object({
   }),
 });
 
-const betRoutes: FastifyPluginAsync = async (fastify) => {
-  // Place bet
-  fastify.post('/place', {
-    onRequest: [fastify.authenticate],
-  }, async (request, reply) => {
-    try {
-      const body = placeBetSchema.parse(request.body);
-      const userId = (request.user as any).id;
+const router = Router();
 
-      const result = await BetEngine.placeBet({
-        userId,
-        gameType: body.gameType as any,
-        currency: body.currency as any,
-        amount: body.amount,
-        gameParams: body.gameParams,
-        isDemo: body.isDemo,
-      });
+// Place bet
+router.post('/place', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const body = placeBetSchema.parse(req.body);
+    const userId = req.user.id;
 
-      return result;
-    } catch (error: any) {
-      return reply.code(400).send({ error: error.message });
-    }
-  });
+    const result = await BetEngine.placeBet({
+      userId,
+      gameType: body.gameType as any,
+      currency: body.currency as any,
+      amount: body.amount,
+      gameParams: body.gameParams,
+      isDemo: body.isDemo,
+    });
 
-  // Start autobet
-  fastify.post('/autobet/start', {
-    onRequest: [fastify.authenticate],
-  }, async (request, reply) => {
-    try {
-      console.log('AutoBet request body:', JSON.stringify(request.body, null, 2));
-      const body = autoBetSchema.parse(request.body);
-      const userId = (request.user as any).id;
+    return res.json(result);
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message });
+  }
+});
 
-      await AutoBetService.startAutoBet(userId, body.config, {
-        userId,
-        gameType: body.gameType as any,
-        currency: body.currency as any,
-        amount: body.amount,
-        gameParams: body.gameParams,
-      });
+// Start autobet
+router.post('/autobet/start', authenticate, async (req: AuthRequest, res) => {
+  try {
+    console.log('AutoBet request body:', JSON.stringify(req.body, null, 2));
+    const body = autoBetSchema.parse(req.body);
+    const userId = req.user.id;
 
-      return { success: true, message: 'Auto-bet started' };
-    } catch (error: any) {
-      console.error('AutoBet error:', error);
-      return reply.code(400).send({ error: error.message || error.toString() });
-    }
-  });
+    await AutoBetService.startAutoBet(userId, body.config, {
+      userId,
+      gameType: body.gameType as any,
+      currency: body.currency as any,
+      amount: body.amount,
+      gameParams: body.gameParams,
+    });
 
-  // Stop autobet
-  fastify.post('/autobet/stop', {
-    onRequest: [fastify.authenticate],
-  }, async (request) => {
-    const userId = (request.user as any).id;
-    await AutoBetService.stopAutoBet(userId);
-    return { success: true, message: 'Auto-bet stopped' };
-  });
+    return res.json({ success: true, message: 'Auto-bet started' });
+  } catch (error: any) {
+    console.error('AutoBet error:', error);
+    return res.status(400).json({ error: error.message || error.toString() });
+  }
+});
 
-  // Get autobet status
-  fastify.get('/autobet/status', {
-    onRequest: [fastify.authenticate],
-  }, async (request) => {
-    const userId = (request.user as any).id;
-    return AutoBetService.getAutoBetStatus(userId);
-  });
+// Stop autobet
+router.post('/autobet/stop', authenticate, async (req: AuthRequest, res) => {
+  const userId = req.user.id;
+  await AutoBetService.stopAutoBet(userId);
+  return res.json({ success: true, message: 'Auto-bet stopped' });
+});
 
-  // Get bet history
-  fastify.get('/history', {
-    onRequest: [fastify.authenticate],
-  }, async (request) => {
-    const userId = (request.user as any).id;
-    const { limit = 50, offset = 0 } = request.query as any;
-    
-    return BetEngine.getBetHistory(userId, parseInt(limit) || 50, parseInt(offset) || 0);
-  });
+// Get autobet status
+router.get('/autobet/status', authenticate, async (req: AuthRequest, res) => {
+  const userId = req.user.id;
+  const status = await AutoBetService.getAutoBetStatus(userId);
+  return res.json(status);
+});
 
-  // Get bet by ID
-  fastify.get('/:betId', async (request) => {
-    const { betId } = request.params as any;
-    return BetEngine.getBetById(betId);
-  });
-};
+// Get bet history
+router.get('/history', authenticate, async (req: AuthRequest, res) => {
+  const userId = req.user.id;
+  const { limit = '50', offset = '0' } = req.query;
+  
+  const bets = await BetEngine.getBetHistory(userId, parseInt(limit as string) || 50, parseInt(offset as string) || 0);
+  return res.json({ bets });
+});
 
-export default betRoutes;
+// Get bet by ID
+router.get('/:betId', async (req, res) => {
+  const { betId } = req.params;
+  const bet = await BetEngine.getBetById(betId);
+  return res.json(bet);
+});
+
+export default router;
