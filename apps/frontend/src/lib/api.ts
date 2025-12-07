@@ -108,6 +108,16 @@ export const leaderboardAPI = {
     api.get('/leaderboard/lucky-wins', { params: { limit } }),
 };
 
+// Mines API
+export const minesAPI = {
+  start: (data: { minesCount: number; betAmount: number; currency: string; gridSize: number }) =>
+    api.post('/mines/start', data),
+  reveal: (data: { sessionId: string; tileIndex: number }) =>
+    api.post('/mines/reveal', data),
+  cashout: (data: { sessionId: string }) =>
+    api.post('/mines/cashout', data),
+};
+
 // Verification API (client-side only, no auth needed)
 export const verifyAPI = {
   calculateResult: (serverSeed: string, clientSeed: string, nonce: number, gameType: string) => {
