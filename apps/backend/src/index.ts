@@ -15,6 +15,7 @@ import contestRoutes from './routes/contest';
 import jackpotRoutes from './routes/jackpot';
 import leaderboardRoutes from './routes/leaderboard';
 import adminRoutes from './routes/admin';
+import minesRoutes from './routes/mines';
 
 // WebSocket handlers
 import { setupCrashSocket } from './websocket/crash';
@@ -58,6 +59,7 @@ async function start() {
   app.use('/api/jackpot', jackpotRoutes);
   app.use('/api/leaderboard', leaderboardRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/mines', minesRoutes);
 
   // Setup Socket.IO
   const io = new Server(httpServer, {

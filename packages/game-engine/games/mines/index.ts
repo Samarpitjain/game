@@ -4,7 +4,8 @@ import { shuffle, generateFloat } from '@casino/fairness';
 export interface MinesParams {
   gridSize: 16 | 25 | 36; // 4x4, 5x5, 6x6
   minesCount: number;
-  revealedTiles?: number[];
+  revealedTiles?: number[]; // For manual mode progressive reveal
+  selectedTiles?: number[]; // For auto-bet mode
 }
 
 export interface MinesResult {
@@ -23,7 +24,10 @@ export class MinesGame extends BaseGame {
     this.validateBet(input.amount, input.currency);
     
     const params = input.gameParams as MinesParams;
-    const { gridSize, minesCount, revealedTiles = [] } = params;
+    const { gridSize, minesCount, revealedTiles = [], selectedTiles = [] } = params;
+    
+    // For auto-bet, use selectedTiles as revealedTiles
+    const tilesToReveal = selectedTiles.length > 0 ? selectedTiles : revealedTiles;
 
     // Validate mines count
     if (minesCount >= gridSize || minesCount < 1) {
@@ -34,10 +38,10 @@ export class MinesGame extends BaseGame {
     const grid = this.generateGrid(gridSize, minesCount, input.seedData);
 
     // Check if any revealed tile is a mine
-    const hitMine = revealedTiles.some(tile => grid[tile]);
+    const hitMine = tilesToReveal.some(tile => grid[tile]);
 
     // Calculate multiplier based on revealed safe tiles
-    const safeTilesRevealed = revealedTiles.filter(tile => !grid[tile]).length;
+    const safeTilesRevealed = tilesToReveal.filter(tile => !grid[tile]).length;
     const multiplier = this.calculateMultiplier(gridSize, minesCount, safeTilesRevealed);
 
     const won = !hitMine && safeTilesRevealed > 0;
@@ -48,7 +52,7 @@ export class MinesGame extends BaseGame {
 
     const result: MinesResult = {
       grid,
-      revealedTiles,
+      revealedTiles: tilesToReveal,
       hitMine,
       currentMultiplier: multiplier,
     };

@@ -11,3 +11,4 @@ export * from './gameconfig.schema';
 export * from './usersettings.schema';
 export * from './userstats.schema';
 export * from './crash.schema';
+export * from './minessession.schema';
