@@ -1,37 +1,35 @@
-import { FastifyPluginAsync } from 'fastify';
+import { Router } from 'express';
 import { WalletService } from '../services/wallet-service';
+import { authenticate, AuthRequest } from '../middleware/auth';
 
-const walletRoutes: FastifyPluginAsync = async (fastify) => {
-  // Get all wallets
-  fastify.get('/', {
-    onRequest: [fastify.authenticate],
-  }, async (request) => {
-    const userId = (request.user as any).id;
-    return WalletService.getAllWallets(userId);
-  });
+const router = Router();
 
-  // Get specific wallet
-  fastify.get('/:currency', {
-    onRequest: [fastify.authenticate],
-  }, async (request) => {
-    const userId = (request.user as any).id;
-    const { currency } = request.params as any;
-    return WalletService.getWallet(userId, currency);
-  });
+// Get all wallets
+router.get('/', authenticate, async (req: AuthRequest, res) => {
+  const userId = req.user.id;
+  const wallets = await WalletService.getAllWallets(userId);
+  return res.json(wallets);
+});
 
-  // Add balance (admin/deposit simulation)
-  fastify.post('/add', {
-    onRequest: [fastify.authenticate],
-  }, async (request, reply) => {
-    const userId = (request.user as any).id;
-    const { currency, amount } = request.body as any;
+// Get specific wallet
+router.get('/:currency', authenticate, async (req: AuthRequest, res) => {
+  const userId = req.user.id;
+  const { currency } = req.params;
+  const wallet = await WalletService.getWallet(userId, currency as any);
+  return res.json(wallet);
+});
 
-    if (amount <= 0) {
-      return reply.code(400).send({ error: 'Invalid amount' });
-    }
+// Add balance (admin/deposit simulation)
+router.post('/add', authenticate, async (req: AuthRequest, res) => {
+  const userId = req.user.id;
+  const { currency, amount } = req.body;
 
-    return WalletService.addBalance(userId, currency, amount);
-  });
-};
+  if (amount <= 0) {
+    return res.status(400).json({ error: 'Invalid amount' });
+  }
 
-export default walletRoutes;
+  const wallet = await WalletService.addBalance(userId, currency, amount);
+  return res.json(wallet);
+});
+
+export default router;

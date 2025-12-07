@@ -1,7 +1,6 @@
-import Fastify from 'fastify';
-import cors from '@fastify/cors';
-import jwt from '@fastify/jwt';
-import websocket from '@fastify/websocket';
+import express from 'express';
+import { createServer } from 'http';
+import cors from 'cors';
 import { Server } from 'socket.io';
 import { connectDB, disconnectDB } from '@casino/database';
 
@@ -26,66 +25,42 @@ import { AutoBetService } from './services/autobet-service';
 import { socketManager } from './services/socket-manager';
 
 const PORT = process.env.PORT || 3001;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 async function start() {
   // Connect to MongoDB
   await connectDB();
   console.log('✅ MongoDB connected');
 
-  const fastify = Fastify({
-    logger: true,
-  });
+  // Create Express app
+  const app = express();
+  const httpServer = createServer(app);
 
-  // Register plugins
-  await fastify.register(cors, {
+  // Middleware
+  app.use(cors({
     origin: process.env.FRONTEND_URL || 'http://localhost:3000',
     credentials: true,
-  });
-
-  await fastify.register(jwt, {
-    secret: JWT_SECRET,
-  });
-
-  // Add authenticate decorator
-  fastify.decorate('authenticate', async (request: any, reply: any) => {
-    try {
-      await request.jwtVerify();
-    } catch (err) {
-      reply.code(401).send({ error: 'Unauthorized' });
-    }
-  });
-
-  await fastify.register(websocket);
+  }));
+  app.use(express.json());
 
   // Health check
-  fastify.get('/health', async () => {
-    return { status: 'ok', timestamp: new Date().toISOString() };
+  app.get('/health', (req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
   // Register routes
-  fastify.register(authRoutes, { prefix: '/api/auth' });
-  fastify.register(betRoutes, { prefix: '/api/bet' });
-  fastify.register(walletRoutes, { prefix: '/api/wallet' });
-  fastify.register(gameRoutes, { prefix: '/api/game' });
-  fastify.register(seedRoutes, { prefix: '/api/seed' });
-  fastify.register(strategyRoutes, { prefix: '/api/strategy' });
-  fastify.register(contestRoutes, { prefix: '/api/contest' });
-  fastify.register(jackpotRoutes, { prefix: '/api/jackpot' });
-  fastify.register(leaderboardRoutes, { prefix: '/api/leaderboard' });
-  fastify.register(adminRoutes, { prefix: '/api/admin' });
+  app.use('/api/auth', authRoutes);
+  app.use('/api/bet', betRoutes);
+  app.use('/api/wallet', walletRoutes);
+  app.use('/api/game', gameRoutes);
+  app.use('/api/seed', seedRoutes);
+  app.use('/api/strategy', strategyRoutes);
+  app.use('/api/contest', contestRoutes);
+  app.use('/api/jackpot', jackpotRoutes);
+  app.use('/api/leaderboard', leaderboardRoutes);
+  app.use('/api/admin', adminRoutes);
 
-  // Start server FIRST
-  try {
-    await fastify.listen({ port: PORT as number, host: '0.0.0.0' });
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-  } catch (err) {
-    fastify.log.error(err);
-    process.exit(1);
-  }
-
-  // Setup Socket.IO AFTER server starts
-  const io = new Server(fastify.server, {
+  // Setup Socket.IO
+  const io = new Server(httpServer, {
     cors: {
       origin: process.env.FRONTEND_URL || 'http://localhost:3000',
       credentials: true,
@@ -118,9 +93,15 @@ async function start() {
   await AutoBetService.startWorker();
   console.log('✅ AutoBet worker started');
 
+  // Start server
+  httpServer.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`🔌 Socket.IO ready on ws://localhost:${PORT}`);
+  });
+
   // Graceful shutdown
   process.on('SIGTERM', async () => {
-    await fastify.close();
+    httpServer.close();
     await disconnectDB();
     process.exit(0);
   });

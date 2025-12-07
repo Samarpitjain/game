@@ -1,17 +1,9 @@
-import { FastifyPluginAsync } from 'fastify';
-import { JackpotService } from '../services/jackpot-service';
+import { Router } from 'express';
 
-const jackpotRoutes: FastifyPluginAsync = async (fastify) => {
-  // Get all jackpots
-  fastify.get('/', async () => {
-    return JackpotService.getAllJackpots();
-  });
+const router = Router();
 
-  // Get jackpot winners
-  fastify.get('/winners', async (request) => {
-    const { limit = 50 } = request.query as any;
-    return JackpotService.getJackpotWinners(limit);
-  });
-};
+router.get('/', async (req, res) => {
+  res.status(501).json({ error: 'Not implemented yet' });
+});
 
-export default jackpotRoutes;
+export default router;
