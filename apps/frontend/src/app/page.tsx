@@ -5,14 +5,27 @@ import { useAuthStore } from '@/store/useAuthStore';
 import Link from 'next/link';
 
 const games = [
-  { id: 'DICE', name: 'Dice', icon: '🎲' },
-  { id: 'LIMBO', name: 'Limbo', icon: '🚀' },
-  { id: 'CRASH', name: 'Crash', icon: '📈' },
-  { id: 'MINES', name: 'Mines', icon: '💣' },
-  { id: 'PLINKO', name: 'Plinko', icon: '⚪' },
-  { id: 'ROULETTE', name: 'Roulette', icon: '🎡' },
-  { id: 'KENO', name: 'Keno', icon: '🎱' },
-  { id: 'WHEEL', name: 'Wheel', icon: '🎰' },
+  { id: 'dice', name: 'Dice', icon: '🎲', status: 'live' },
+  { id: 'limbo', name: 'Limbo', icon: '🚀', status: 'live' },
+  { id: 'coinflip', name: 'Coin Flip', icon: '🪙', status: 'live' },
+  { id: 'rush', name: 'Rush', icon: '⚡', status: 'live' },
+  { id: 'balloon', name: 'Balloon', icon: '🎈', status: 'live' },
+  { id: 'wheel', name: 'Wheel', icon: '🎰', status: 'live' },
+  { id: 'mines', name: 'Mines', icon: '💣', status: 'live' },
+  { id: 'plinko', name: 'Plinko', icon: '⚪', status: 'live' },
+  { id: 'keno', name: 'Keno', icon: '🎱', status: 'live' },
+  { id: 'fastparity', name: 'Fast Parity', icon: '🎨', status: 'live' },
+  { id: 'solocrash', name: 'Solo Crash', icon: '📊', status: 'live' },
+  { id: 'roulette', name: 'Roulette', icon: '🎡', status: 'live' },
+  { id: 'tower', name: 'Tower', icon: '🗼', status: 'live' },
+  { id: 'stairs', name: 'Stairs', icon: '🪜', status: 'live' },
+  { id: 'hilo', name: 'HiLo', icon: '🃏', status: 'live' },
+  { id: 'blackjack', name: 'Blackjack', icon: '♠️', status: 'live' },
+  { id: 'crash', name: 'Crash MP', icon: '📈', status: 'live' },
+  { id: 'trenball', name: 'Trenball', icon: '⚽', status: 'live' },
+  { id: 'blackjack', name: 'Blackjack', icon: '♠️', status: 'coming' },
+  { id: 'ludo', name: 'Ludo', icon: '🎲', status: 'coming' },
+  { id: 'chess', name: 'Chess', icon: '♟️', status: 'coming' },
 ];
 
 export default function HomePage() {
@@ -78,9 +91,16 @@ export default function HomePage() {
           {games.map((game) => (
             <Link
               key={game.id}
-              href={`/game/${game.id.toLowerCase()}`}
-              className="card hover:border-primary transition-all cursor-pointer group"
+              href={game.status === 'live' ? `/game/${game.id}` : '#'}
+              className={`card hover:border-primary transition-all group relative ${
+                game.status === 'live' ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+              }`}
             >
+              {game.status === 'coming' && (
+                <div className="absolute top-2 right-2 bg-yellow-500 text-black text-xs px-2 py-1 rounded font-bold">
+                  SOON
+                </div>
+              )}
               <div className="text-6xl mb-4 group-hover:scale-110 transition-transform">
                 {game.icon}
               </div>

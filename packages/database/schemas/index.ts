@@ -12,3 +12,7 @@ export * from './usersettings.schema';
 export * from './userstats.schema';
 export * from './crash.schema';
 export * from './minessession.schema';
+export * from './towersession.schema';
+export * from './stairssession.schema';
+export * from './hilosession.schema';
+export * from './blackjacksession.schema';

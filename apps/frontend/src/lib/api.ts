@@ -118,6 +118,48 @@ export const minesAPI = {
     api.post('/mines/cashout', data),
 };
 
+// Tower API
+export const towerAPI = {
+  start: (data: { floors: number; betAmount: number; currency: string }) =>
+    api.post('/tower/start', data),
+  reveal: (data: { sessionId: string; tileIndex: number }) =>
+    api.post('/tower/reveal', data),
+  cashout: (data: { sessionId: string }) =>
+    api.post('/tower/cashout', data),
+};
+
+// Stairs API
+export const stairsAPI = {
+  start: (data: { steps: number; betAmount: number; currency: string }) =>
+    api.post('/stairs/start', data),
+  reveal: (data: { sessionId: string; tileIndex: number }) =>
+    api.post('/stairs/reveal', data),
+  cashout: (data: { sessionId: string }) =>
+    api.post('/stairs/cashout', data),
+};
+
+// HiLo API
+export const hiloAPI = {
+  start: (data: { betAmount: number; currency: string }) =>
+    api.post('/hilo/start', data),
+  predict: (data: { sessionId: string; choice: 'higher' | 'lower' | 'skip' }) =>
+    api.post('/hilo/predict', data),
+  cashout: (data: { sessionId: string }) =>
+    api.post('/hilo/cashout', data),
+};
+
+// Blackjack API
+export const blackjackAPI = {
+  start: (data: { betAmount: number; currency: string }) =>
+    api.post('/blackjack/start', data),
+  hit: (data: { sessionId: string }) =>
+    api.post('/blackjack/hit', data),
+  stand: (data: { sessionId: string }) =>
+    api.post('/blackjack/stand', data),
+  double: (data: { sessionId: string }) =>
+    api.post('/blackjack/double', data),
+};
+
 // Verification API (client-side only, no auth needed)
 export const verifyAPI = {
   calculateResult: (serverSeed: string, clientSeed: string, nonce: number, gameType: string) => {

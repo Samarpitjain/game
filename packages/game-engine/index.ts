@@ -10,3 +10,7 @@ export { CrashGame } from './games/crash';
 export { RouletteGame } from './games/roulette';
 export { KenoGame } from './games/keno';
 export { WheelGame } from './games/wheel';
+export { TowerGame } from './games/tower';
+export { StairsGame } from './games/stairs';
+export { HiLoGame } from './games/hilo';
+export { BlackjackGame } from './games/blackjack';
