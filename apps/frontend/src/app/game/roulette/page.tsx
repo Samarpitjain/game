@@ -56,6 +56,23 @@ export default function RoulettePage() {
     }
   };
 
+  // Calculate average multiplier for roulette bets
+  const getRouletteMultiplier = () => {
+    if (gameParams.bets.length === 0) return 0;
+    const totalAmount = gameParams.bets.reduce((sum, b) => sum + b.amount, 0);
+    if (totalAmount === 0) return 0;
+    // Calculate weighted average multiplier
+    const weightedSum = gameParams.bets.reduce((sum, bet) => {
+      const multipliers: Record<string, number> = {
+        straight: 35, split: 17, street: 11, corner: 8,
+        line: 5, dozen: 2, column: 2, red: 1, black: 1,
+        even: 1, odd: 1, low: 1, high: 1
+      };
+      return sum + (bet.amount * (multipliers[bet.type] || 1));
+    }, 0);
+    return weightedSum / totalAmount;
+  };
+
   const placeBet = async () => {
     if (gameParams.bets.length === 0) {
       toast.error('Place at least one bet');
@@ -183,6 +200,7 @@ export default function RoulettePage() {
                   onBet={placeBet}
                   disabled={autoBetActive || gameParams.bets.length === 0}
                   loading={loading}
+                  multiplier={getRouletteMultiplier()}
                 />
               )}
 
