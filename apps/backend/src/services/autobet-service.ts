@@ -123,6 +123,13 @@ export class AutoBetService {
   }
 
   /**
+   * Check if game type is session-based
+   */
+  private static isSessionGame(gameType: string): boolean {
+    return ['MINES', 'TOWER', 'STAIRS', 'HILO', 'BLACKJACK'].includes(gameType);
+  }
+
+  /**
    * Start autobet session
    */
   static async startAutoBet(userId: string, config: AutoBetConfig, betInput: Omit<PlaceBetInput, 'isAutoBet'>) {
@@ -134,6 +141,12 @@ export class AutoBetService {
     // Stop any existing session
     await this.stopAutoBet(userId);
     
+    // Check if this is a session-based game
+    if (this.isSessionGame(betInput.gameType)) {
+      console.log(`[AutoBet] Session game ${betInput.gameType} - AutoBet not supported`);
+      throw new Error(`AutoBet is not supported for ${betInput.gameType}. This game requires manual play.`);
+    }
+
     // Store initial amount for reset functionality
     const sessionData = {
       ...config,

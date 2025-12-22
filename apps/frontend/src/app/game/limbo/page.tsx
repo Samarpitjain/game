@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import BetModeSelector from '@/components/betting/BetModeSelector';
 import ManualBetControls from '@/components/betting/ManualBetControls';
 import AutoBetControls, { AutoBetConfig } from '@/components/betting/AutoBetControls';
+import StrategySelector from '@/components/betting/StrategySelector';
 import LimboGameControls, { LimboGameParams } from '@/components/games/limbo/LimboGameControls';
 import FairnessModal from '@/components/games/FairnessModal';
 import { useAutoBetSocket } from '@/hooks/useAutoBetSocket';
@@ -201,6 +202,7 @@ export default function LimboPage() {
                   onBet={placeBet}
                   disabled={autoBetActive}
                   loading={loading}
+                  multiplier={gameParams.targetMultiplier}
                 />
               )}
 
@@ -219,9 +221,15 @@ export default function LimboPage() {
 
               {/* Strategy */}
               {betMode === 'strategy' && (
-                <div className="text-center py-8 text-gray-400">
-                  Strategy mode coming soon...
-                </div>
+                <StrategySelector
+                  amount={amount}
+                  balance={balance}
+                  onAmountChange={setAmount}
+                  onStart={handleStartAutoBet}
+                  onStop={handleStopAutoBet}
+                  isActive={autoBetActive}
+                  disabled={loading || amount <= 0 || amount > balance}
+                />
               )}
             </div>
 

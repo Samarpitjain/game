@@ -140,10 +140,10 @@ export default function FairnessModal({ isOpen, onClose }: FairnessModalProps) {
                   Nonce (Bet Counter)
                 </label>
                 <div className="bg-gray-800 p-3 rounded-lg font-mono text-sm">
-                  {seedData.nonce}
+                  {(seedData.nonce || 0) + 1}
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Increments with each bet to ensure unique outcomes
+                  Next bet will use nonce {(seedData.nonce || 0) + 1}. Starts from 1 for first bet.
                 </p>
               </div>
 
@@ -173,6 +173,12 @@ export default function FairnessModal({ isOpen, onClose }: FairnessModalProps) {
                   <li>HMAC-SHA256 generates the random outcome</li>
                   <li>After rotating, you can verify all past bets</li>
                 </ol>
+                
+                <div className="mt-4 p-3 bg-yellow-900/20 border border-yellow-500/50 rounded">
+                  <div className="text-xs text-yellow-400">
+                    <strong>Note:</strong> Some games (Mines, Tower, Stairs, HiLo, Blackjack) use session-based gameplay but still use the same provably fair system for their random elements.
+                  </div>
+                </div>
               </div>
 
               {/* Verifier Link */}

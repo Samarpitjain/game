@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import BetAmountSlider from './BetAmountSlider';
 
 export interface AutoBetConfig {
   numberOfBets: number;
@@ -37,29 +38,20 @@ export default function AutoBetControls({ amount, balance, onAmountChange, onSta
   const [stopOnLoss, setStopOnLoss] = useState<number>(0);
 
   const handleStart = () => {
-    const config: any = {
+    const config: AutoBetConfig = {
       enabled: true,
       numberOfBets,
-    };
-    
-    // Only add advanced settings if advanced mode is enabled
-    if (showAdvanced) {
-      config.onWin = {
+      onWin: {
         reset: onWinAction === 'reset',
         increaseBy: onWinAction === 'increase' ? onWinValue : undefined,
-      };
-      config.onLoss = {
+      },
+      onLoss: {
         reset: onLossAction === 'reset',
         increaseBy: onLossAction === 'increase' ? onLossValue : undefined,
-      };
-      
-      if (stopOnProfit > 0) {
-        config.stopOnProfit = stopOnProfit;
-      }
-      if (stopOnLoss > 0) {
-        config.stopOnLoss = stopOnLoss;
-      }
-    }
+      },
+      stopOnProfit: showAdvanced && stopOnProfit > 0 ? stopOnProfit : undefined,
+      stopOnLoss: showAdvanced && stopOnLoss > 0 ? stopOnLoss : undefined,
+    };
     
     onStart(config);
   };
@@ -75,12 +67,21 @@ export default function AutoBetControls({ amount, balance, onAmountChange, onSta
             type="number"
             value={amount}
             onChange={(e) => onAmountChange(parseFloat(e.target.value) || 0)}
-            className="input w-full"
+            className="input w-full mb-3"
             min="0"
             step="0.01"
             disabled={disabled || isActive}
           />
-          <div className="grid grid-cols-4 gap-2 mt-2">
+          <div className="mb-3">
+            <BetAmountSlider
+              value={amount}
+              min={0.01}
+              max={balance || 100}
+              onChange={onAmountChange}
+              disabled={disabled || isActive}
+            />
+          </div>
+          <div className="grid grid-cols-4 gap-2">
             <button onClick={() => onAmountChange(amount / 2)} disabled={disabled || isActive} className="btn-secondary py-2">½×</button>
             <button onClick={() => onAmountChange(amount * 2)} disabled={disabled || isActive} className="btn-secondary py-2">2×</button>
             <button onClick={() => onAmountChange(balance)} disabled={disabled || isActive} className="btn-secondary py-2">Max</button>

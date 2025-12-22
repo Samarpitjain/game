@@ -8,7 +8,10 @@ import { useAutoBetSocket } from '@/hooks/useAutoBetSocket';
 import BetModeSelector from '@/components/betting/BetModeSelector';
 import ManualBetControls from '@/components/betting/ManualBetControls';
 import AutoBetControls, { AutoBetConfig } from '@/components/betting/AutoBetControls';
+import StrategySelector from '@/components/betting/StrategySelector';
 import PlinkoGameControls, { PlinkoGameParams } from '@/components/games/plinko/PlinkoGameControls';
+import PlinkoBoard from '@/components/games/plinko/PlinkoBoard';
+import TrajectoryHistory from '@/components/games/plinko/TrajectoryHistory';
 import FairnessModal from '@/components/games/FairnessModal';
 
 type BetMode = 'manual' | 'auto' | 'strategy';
@@ -17,6 +20,9 @@ export default function PlinkoPage() {
   const [betMode, setBetMode] = useState<BetMode>('manual');
   const [amount, setAmount] = useState(10);
   const [gameParams, setGameParams] = useState<PlinkoGameParams>({ risk: 'medium', rows: 12, superMode: false });
+  const [isDropping, setIsDropping] = useState(false);
+  const [trajectoryHistory, setTrajectoryHistory] = useState<Array<{path: number[], slot: number, multiplier: number, won: boolean}>>([]);
+  const [showTrajectoryHistory, setShowTrajectoryHistory] = useState(false);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [balance, setBalance] = useState(0);
@@ -61,10 +67,26 @@ export default function PlinkoPage() {
     }
 
     setLoading(true);
+    setIsDropping(true);
+    setResult(null);
+    
+    // Simulate ball drop duration
+    setTimeout(() => setIsDropping(false), 2500);
+    
     try {
       const response = await betAPI.place({ gameType: 'PLINKO', currency: 'USD', amount, gameParams });
       const { bet, result: gameResult } = response.data;
       setResult(gameResult.result || gameResult);
+
+      // Add to trajectory history
+      if (gameResult.path && gameResult.finalSlot !== undefined) {
+        setTrajectoryHistory(prev => [...prev, {
+          path: gameResult.path,
+          slot: gameResult.finalSlot,
+          multiplier: gameResult.multiplier,
+          won: gameResult.won
+        }].slice(-20)); // Keep last 20
+      }
 
       if (gameResult.won) {
         toast.success(`Won $${gameResult.profit.toFixed(2)}!`);
@@ -124,16 +146,26 @@ export default function PlinkoPage() {
             <div className="card">
               <h2 className="text-2xl font-bold mb-6">Plinko</h2>
 
-              {result && (
-                <div className={`mb-6 p-6 rounded-lg text-center ${result.multiplier > 0 ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
-                  <div className="text-6xl font-bold mb-2">⚪</div>
-                  <div className="text-2xl mb-2">Slot {result.finalSlot}</div>
-                  <div className="text-xl">{result.multiplier}x Multiplier</div>
-                  <div className="text-sm text-gray-400 mt-2">
-                    Path: {result.path.map((d: number) => d === 0 ? '←' : '→').join(' ')}
+              <div className="mb-6">
+                <PlinkoBoard 
+                  rows={gameParams.rows}
+                  risk={gameParams.risk}
+                  result={result}
+                  isDropping={isDropping}
+                  superMode={gameParams.superMode}
+                />
+                
+                {result && !isDropping && (
+                  <div className={`mt-4 p-4 rounded-lg text-center ${result.multiplier >= 1 ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
+                    <div className="text-2xl mb-2">{result.multiplier >= 1 ? '🎉 WIN!' : '😢 LOST'}</div>
+                    <div className="text-lg">
+                      {result.multiplier >= 1000 ? `${(result.multiplier/1000).toFixed(0)}k` : 
+                       result.multiplier >= 100 ? result.multiplier.toFixed(0) : 
+                       result.multiplier.toFixed(1)}x Multiplier
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
 
               <PlinkoGameControls onChange={setGameParams} disabled={loading || autoBetActive} />
             </div>
@@ -143,12 +175,22 @@ export default function PlinkoPage() {
             <div className="card">
               <BetModeSelector mode={betMode} onChange={setBetMode} showStrategy={true} />
               {betMode === 'manual' && (
-                <ManualBetControls amount={amount} balance={balance} onAmountChange={setAmount} onBet={placeBet} disabled={autoBetActive} loading={loading} />
+                <ManualBetControls amount={amount} balance={balance} onAmountChange={setAmount} onBet={placeBet} disabled={autoBetActive} loading={loading} multiplier={result?.multiplier || 1.2} />
               )}
               {betMode === 'auto' && (
                 <AutoBetControls amount={amount} balance={balance} onAmountChange={setAmount} onStart={handleStartAutoBet} onStop={handleStopAutoBet} isActive={autoBetActive} disabled={loading || amount <= 0 || amount > balance} />
               )}
-              {betMode === 'strategy' && (<div className="text-center py-8 text-gray-400">Strategy mode coming soon...</div>)}
+              {betMode === 'strategy' && (
+                <StrategySelector
+                  amount={amount}
+                  balance={balance}
+                  onAmountChange={setAmount}
+                  onStart={handleStartAutoBet}
+                  onStop={handleStopAutoBet}
+                  isActive={autoBetActive}
+                  disabled={loading || amount <= 0 || amount > balance}
+                />
+              )}
             </div>
 
             {autoBetActive && (
@@ -158,6 +200,15 @@ export default function PlinkoPage() {
                   <div className="text-lg font-bold">Running...</div>
                 </div>
               </div>
+            )}
+
+            {gameParams.jackpotMode && (
+              <TrajectoryHistory 
+                trajectories={trajectoryHistory}
+                jackpotCondition={gameParams.jackpotCondition}
+                showHistory={showTrajectoryHistory}
+                onToggle={() => setShowTrajectoryHistory(!showTrajectoryHistory)}
+              />
             )}
 
             <div className="card">

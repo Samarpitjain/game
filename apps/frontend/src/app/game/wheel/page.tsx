@@ -140,7 +140,7 @@ export default function WheelPage() {
             <div className="card">
               <BetModeSelector mode={betMode} onChange={setBetMode} showStrategy={true} />
               {betMode === 'manual' && (
-                <ManualBetControls amount={amount} balance={balance} onAmountChange={setAmount} onBet={placeBet} disabled={autoBetActive} loading={loading} />
+                <ManualBetControls amount={amount} balance={balance} onAmountChange={setAmount} onBet={placeBet} disabled={autoBetActive} loading={loading} multiplier={result?.multiplier || 1.5} />
               )}
               {betMode === 'auto' && (
                 <AutoBetControls amount={amount} balance={balance} onAmountChange={setAmount} onStart={handleStartAutoBet} onStop={handleStopAutoBet} isActive={autoBetActive} disabled={loading || amount <= 0 || amount > balance} />

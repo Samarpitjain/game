@@ -5,10 +5,15 @@ import { walletAPI } from '@/lib/api';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { io, Socket } from 'socket.io-client';
+import BetModeSelector from '@/components/betting/BetModeSelector';
+import ManualBetControls from '@/components/betting/ManualBetControls';
+
+type BetMode = 'manual';
 
 type BetType = 'crash' | 'red' | 'green' | 'moon';
 
 export default function TrenballPage() {
+  const [betMode, setBetMode] = useState<BetMode>('manual');
   const [amount, setAmount] = useState(10);
   const [balance, setBalance] = useState(0);
   const [socket, setSocket] = useState<Socket | null>(null);
@@ -210,26 +215,20 @@ export default function TrenballPage() {
 
           <div className="space-y-6">
             <div className="card">
-              <h3 className="text-xl font-bold mb-4">Bet Amount</h3>
-              <input
-                type="number"
-                value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
-                className="w-full bg-gray-800 rounded-lg px-4 py-3 text-xl"
-                disabled={gameState !== 'betting'}
+              <BetModeSelector
+                mode={betMode}
+                onChange={setBetMode}
+                showStrategy={false}
               />
-              <div className="grid grid-cols-4 gap-2 mt-2">
-                {[1, 5, 10, 50].map(val => (
-                  <button
-                    key={val}
-                    onClick={() => setAmount(val)}
-                    className="btn-secondary py-2"
-                    disabled={gameState !== 'betting'}
-                  >
-                    ${val}
-                  </button>
-                ))}
-              </div>
+
+              <ManualBetControls
+                amount={amount}
+                balance={balance}
+                onAmountChange={setAmount}
+                onBet={() => {}} // Trenball uses custom bet buttons
+                disabled={gameState !== 'betting'}
+                loading={false}
+              />
             </div>
 
             <div className="card">

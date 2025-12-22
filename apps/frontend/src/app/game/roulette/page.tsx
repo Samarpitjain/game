@@ -6,6 +6,8 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { useAutoBetSocket } from '@/hooks/useAutoBetSocket';
 import BetModeSelector from '@/components/betting/BetModeSelector';
+import ManualBetControls from '@/components/betting/ManualBetControls';
+import AutoBetControls, { AutoBetConfig } from '@/components/betting/AutoBetControls';
 import RouletteGameControls, { RouletteGameParams } from '@/components/games/roulette/RouletteGameControls';
 import FairnessModal from '@/components/games/FairnessModal';
 
@@ -14,6 +16,7 @@ type BetMode = 'manual' | 'auto' | 'strategy';
 export default function RoulettePage() {
   const [betMode, setBetMode] = useState<BetMode>('manual');
   const [amount, setAmount] = useState(10);
+  const [autoBetActive, setAutoBetActive] = useState(false);
   const [gameParams, setGameParams] = useState<RouletteGameParams>({ bets: [] });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -32,6 +35,16 @@ export default function RoulettePage() {
       setUserId(payload.id);
     }
   }, []);
+
+  useAutoBetSocket(userId, (data) => {
+    setResult(data.bet.result);
+    if (data.wallet) setBalance(data.wallet.balance);
+    if (data.bet.won) {
+      setStats(s => ({ ...s, wins: s.wins + 1, profit: s.profit + data.bet.profit, wagered: s.wagered + data.bet.amount }));
+    } else {
+      setStats(s => ({ ...s, losses: s.losses + 1, profit: s.profit + data.bet.profit, wagered: s.wagered + data.bet.amount }));
+    }
+  });
 
   const loadBalance = async () => {
     try {
@@ -77,6 +90,37 @@ export default function RoulettePage() {
     }
   };
 
+  const handleStartAutoBet = async (config: AutoBetConfig) => {
+    if (gameParams.bets.length === 0) {
+      toast.error('Place at least one bet first');
+      return;
+    }
+    try {
+      await betAPI.startAutobet({
+        gameType: 'ROULETTE',
+        currency: 'USD',
+        amount: gameParams.bets.reduce((sum, b) => sum + b.amount, 0),
+        gameParams,
+        config,
+      });
+      setAutoBetActive(true);
+      toast.success('Auto-bet started');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to start auto-bet');
+    }
+  };
+
+  const handleStopAutoBet = async () => {
+    try {
+      await betAPI.stopAutobet();
+      setAutoBetActive(false);
+      toast.success('Auto-bet stopped');
+      await loadBalance();
+    } catch (error: any) {
+      toast.error('Failed to stop auto-bet');
+    }
+  };
+
   const getNumberColor = (num: number) => {
     if (num === 0) return 'green';
     return redNumbers.includes(num) ? 'red' : 'black';
@@ -119,19 +163,51 @@ export default function RoulettePage() {
                 </div>
               )}
 
-              <RouletteGameControls onChange={setGameParams} disabled={loading} amount={amount} />
-
-              <button
-                onClick={placeBet}
-                disabled={loading || gameParams.bets.length === 0}
-                className="btn-primary w-full py-3 mt-4 disabled:opacity-50"
-              >
-                {loading ? 'Spinning...' : 'Spin'}
-              </button>
+              <RouletteGameControls onChange={setGameParams} disabled={loading || autoBetActive} amount={amount} />
             </div>
           </div>
 
           <div className="space-y-6">
+            <div className="card">
+              <BetModeSelector
+                mode={betMode}
+                onChange={setBetMode}
+                showStrategy={false}
+              />
+
+              {betMode === 'manual' && (
+                <ManualBetControls
+                  amount={gameParams.bets.reduce((sum, b) => sum + b.amount, 0) || amount}
+                  balance={balance}
+                  onAmountChange={() => {}}
+                  onBet={placeBet}
+                  disabled={autoBetActive || gameParams.bets.length === 0}
+                  loading={loading}
+                />
+              )}
+
+              {betMode === 'auto' && (
+                <AutoBetControls
+                  amount={gameParams.bets.reduce((sum, b) => sum + b.amount, 0) || amount}
+                  balance={balance}
+                  onAmountChange={() => {}}
+                  onStart={handleStartAutoBet}
+                  onStop={handleStopAutoBet}
+                  isActive={autoBetActive}
+                  disabled={loading || gameParams.bets.length === 0}
+                />
+              )}
+            </div>
+
+            {autoBetActive && (
+              <div className="card bg-blue-900/20 border border-blue-500">
+                <div className="text-center">
+                  <div className="text-sm text-gray-400 mb-1">Auto-Bet Active</div>
+                  <div className="text-lg font-bold">Running...</div>
+                </div>
+              </div>
+            )}
+
             <div className="card">
               <h3 className="text-xl font-bold mb-4">Live Stats</h3>
               <div className="space-y-2">

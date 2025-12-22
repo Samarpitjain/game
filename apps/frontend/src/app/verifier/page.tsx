@@ -7,7 +7,7 @@ import { createHmac, createHash } from 'crypto';
 export default function VerifierPage() {
   const [serverSeed, setServerSeed] = useState('');
   const [clientSeed, setClientSeed] = useState('');
-  const [nonce, setNonce] = useState(0);
+  const [nonce, setNonce] = useState(1);
   const [gameType, setGameType] = useState('DICE');
   const [result, setResult] = useState<any>(null);
 
@@ -19,7 +19,7 @@ export default function VerifierPage() {
 
     // Generate HMAC (Stake implementation)
     const currentRound = Math.floor(0 / 32); // cursor = 0 for most games
-    const message = `${clientSeed}:${nonce}:${currentRound}`;
+    const message = `${clientSeed}:${nonce - 1}:${currentRound}`; // Convert to 0-based for calculation
     const hmac = createHmac('sha256', serverSeed).update(message).digest('hex');
     
     // Convert first 4 bytes (8 hex chars) to float
@@ -66,12 +66,65 @@ export default function VerifierPage() {
           explanation: `Pocket = floor(${float.toFixed(10)} * 37) = ${pocket}`,
         };
         break;
+
+      case 'COINFLIP':
+        const coinResult = float < 0.5 ? 'heads' : 'tails';
+        gameResult = {
+          result: coinResult,
+          float,
+          hmac,
+          explanation: `Result = ${float.toFixed(10)} < 0.5 ? 'heads' : 'tails' = ${coinResult}`,
+        };
+        break;
+
+      case 'PLINKO':
+        // Generate path for 12 rows (default)
+        const rows = 12;
+        const path = [];
+        for (let i = 0; i < rows; i++) {
+          const stepHmac = createHmac('sha256', serverSeed).update(`${clientSeed}:${nonce}:${i}`).digest('hex');
+          const stepHex = stepHmac.substring(0, 8);
+          const stepFloat = parseInt(stepHex, 16) / 0x100000000;
+          path.push(stepFloat < 0.5 ? 0 : 1);
+        }
+        const finalSlot = path.reduce((sum, dir) => sum + dir, 0);
+        gameResult = {
+          path: path.join(''),
+          finalSlot,
+          float,
+          hmac,
+          explanation: `Path: ${path.map(d => d === 0 ? 'L' : 'R').join('')} → Slot ${finalSlot}`,
+        };
+        break;
+
+      case 'WHEEL':
+        // Default 10 segments
+        const segment = Math.floor(float * 10);
+        gameResult = {
+          segment,
+          float,
+          hmac,
+          explanation: `Segment = floor(${float.toFixed(10)} * 10) = ${segment}`,
+        };
+        break;
+
+      case 'FASTPARITY':
+        const number = Math.floor(float * 10);
+        const color = number === 0 ? 'green' : (number % 2 === 0 ? 'violet' : 'red');
+        gameResult = {
+          number,
+          color,
+          float,
+          hmac,
+          explanation: `Number = floor(${float.toFixed(10)} * 10) = ${number} (${color})`,
+        };
+        break;
         
       default:
         gameResult = {
           float,
           hmac,
-          explanation: 'Select a game type to see specific result calculation',
+          explanation: 'Basic verification - game-specific calculations available for: Dice, Limbo, Roulette, Coin Flip, Plinko, Wheel, Fast Parity',
         };
     }
 
@@ -150,10 +203,13 @@ export default function VerifierPage() {
               <input
                 type="number"
                 value={nonce}
-                onChange={(e) => setNonce(parseInt(e.target.value) || 0)}
+                onChange={(e) => setNonce(parseInt(e.target.value) || 1)}
                 className="input w-full"
-                min="0"
+                min="1"
               />
+              <p className="text-xs text-gray-500 mt-1">
+                First bet uses nonce 1, second bet uses nonce 2, etc.
+              </p>
             </div>
 
             {/* Game Type */}
@@ -168,9 +224,21 @@ export default function VerifierPage() {
               >
                 <option value="DICE">Dice</option>
                 <option value="LIMBO">Limbo</option>
+                <option value="CRASH">Crash</option>
+                <option value="MINES">Mines</option>
+                <option value="PLINKO">Plinko</option>
                 <option value="ROULETTE">Roulette</option>
-                <option value="MINES">Mines (Coming Soon)</option>
-                <option value="PLINKO">Plinko (Coming Soon)</option>
+                <option value="FASTPARITY">Fast Parity</option>
+                <option value="KENO">Keno</option>
+                <option value="TOWER">Tower</option>
+                <option value="HILO">HiLo</option>
+                <option value="BLACKJACK">Blackjack</option>
+                <option value="WHEEL">Wheel</option>
+                <option value="BALLOON">Balloon</option>
+                <option value="RUSH">Rush</option>
+                <option value="COINFLIP">Coin Flip</option>
+                <option value="TRENBALL">Trenball</option>
+                <option value="STAIRS">Stairs</option>
               </select>
             </div>
 
@@ -222,6 +290,42 @@ export default function VerifierPage() {
                     <div className="text-sm text-gray-400">Roulette Pocket</div>
                     <div className="font-mono text-2xl font-bold text-secondary">
                       {result.pocket}
+                    </div>
+                  </div>
+                )}
+
+                {result.result && typeof result.result === 'string' && (
+                  <div>
+                    <div className="text-sm text-gray-400">Game Result</div>
+                    <div className="font-mono text-2xl font-bold text-secondary">
+                      {result.result}
+                    </div>
+                  </div>
+                )}
+
+                {result.path && (
+                  <div>
+                    <div className="text-sm text-gray-400">Plinko Path → Final Slot</div>
+                    <div className="font-mono text-lg font-bold text-secondary">
+                      {result.path} → {result.finalSlot}
+                    </div>
+                  </div>
+                )}
+
+                {result.segment !== undefined && (
+                  <div>
+                    <div className="text-sm text-gray-400">Wheel Segment</div>
+                    <div className="font-mono text-2xl font-bold text-secondary">
+                      {result.segment}
+                    </div>
+                  </div>
+                )}
+
+                {result.number !== undefined && result.color && (
+                  <div>
+                    <div className="text-sm text-gray-400">Fast Parity Result</div>
+                    <div className="font-mono text-2xl font-bold text-secondary">
+                      {result.number} ({result.color})
                     </div>
                   </div>
                 )}

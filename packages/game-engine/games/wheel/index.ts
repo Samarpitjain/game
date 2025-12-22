@@ -88,8 +88,11 @@ export class WheelGame extends BaseGame {
     // Assign color
     const color = this.colors[segment % this.colors.length];
 
-    const won = multiplier > 0;
-    const payout = this.calculatePayout(input.amount, multiplier);
+    // Apply house edge to multiplier
+    const finalMultiplier = multiplier * (1 - this.config.houseEdge / 100);
+    
+    const won = finalMultiplier >= 1;
+    const payout = this.calculatePayout(input.amount, finalMultiplier);
     const profit = this.calculateProfit(input.amount, payout);
 
     const result: WheelResult = {
@@ -99,12 +102,15 @@ export class WheelGame extends BaseGame {
     };
 
     return {
-      multiplier,
+      multiplier: finalMultiplier,
       payout,
       profit,
       won,
       gameData: params,
-      result,
+      result: {
+        ...result,
+        multiplier: finalMultiplier,
+      },
     };
   }
 

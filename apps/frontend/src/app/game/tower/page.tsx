@@ -1,20 +1,28 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { walletAPI, towerAPI } from '@/lib/api';
+import { walletAPI, towerAPI, betAPI } from '@/lib/api';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import { useAutoBetSocket } from '@/hooks/useAutoBetSocket';
+import BetModeSelector from '@/components/betting/BetModeSelector';
 import ManualBetControls from '@/components/betting/ManualBetControls';
+import AutoBetControls, { AutoBetConfig } from '@/components/betting/AutoBetControls';
 import TowerGameControls, { TowerGameParams } from '@/components/games/tower/TowerGameControls';
 import FairnessModal from '@/components/games/FairnessModal';
 
+type BetMode = 'manual' | 'auto';
+
 export default function TowerPage() {
+  const [betMode, setBetMode] = useState<BetMode>('manual');
   const [amount, setAmount] = useState(10);
   const [gameParams, setGameParams] = useState<TowerGameParams>({ floors: 10 });
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState(0);
   const [stats, setStats] = useState({ profit: 0, wins: 0, losses: 0, wagered: 0 });
+  const [autoBetActive, setAutoBetActive] = useState(false);
   const [fairnessModalOpen, setFairnessModalOpen] = useState(false);
+  const [userId, setUserId] = useState<string>();
 
   const [gameActive, setGameActive] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -25,7 +33,21 @@ export default function TowerPage() {
 
   useEffect(() => {
     loadBalance();
+    const token = localStorage.getItem('token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      setUserId(payload.id);
+    }
   }, []);
+
+  useAutoBetSocket(userId, (data) => {
+    if (data.wallet) setBalance(data.wallet.balance);
+    if (data.bet.won) {
+      setStats(s => ({ ...s, wins: s.wins + 1, profit: s.profit + data.bet.profit, wagered: s.wagered + data.bet.amount }));
+    } else {
+      setStats(s => ({ ...s, losses: s.losses + 1, profit: s.profit + data.bet.profit, wagered: s.wagered + data.bet.amount }));
+    }
+  });
 
   const loadBalance = async () => {
     try {
@@ -119,6 +141,33 @@ export default function TowerPage() {
     }
   };
 
+  const handleStartAutoBet = async (config: AutoBetConfig) => {
+    try {
+      await betAPI.startAutobet({
+        gameType: 'TOWER',
+        currency: 'USD',
+        amount,
+        gameParams,
+        config,
+      });
+      setAutoBetActive(true);
+      toast.success('Auto-bet started');
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to start auto-bet');
+    }
+  };
+
+  const handleStopAutoBet = async () => {
+    try {
+      await betAPI.stopAutobet();
+      setAutoBetActive(false);
+      toast.success('Auto-bet stopped');
+      await loadBalance();
+    } catch (error: any) {
+      toast.error('Failed to stop auto-bet');
+    }
+  };
+
   const resetGame = () => {
     setGameActive(false);
     setGameOver(false);
@@ -193,17 +242,39 @@ export default function TowerPage() {
 
           <div className="space-y-6">
             <div className="card">
-              {!gameActive && (
+              <BetModeSelector
+                mode={betMode}
+                onChange={setBetMode}
+                showStrategy={false}
+              />
+
+              {betMode === 'manual' && !gameActive && (
                 <ManualBetControls
                   amount={amount}
                   balance={balance}
                   onAmountChange={setAmount}
                   onBet={startGame}
-                  disabled={false}
+                  disabled={autoBetActive}
                   loading={loading}
                 />
               )}
+
+              {betMode === 'auto' && (
+                <div className="text-center py-8 text-gray-400">
+                  <div className="text-lg mb-2">⚠️ AutoBet Not Available</div>
+                  <div className="text-sm">This game requires manual play due to its interactive nature.</div>
+                </div>
+              )}
             </div>
+
+            {autoBetActive && (
+              <div className="card bg-blue-900/20 border border-blue-500">
+                <div className="text-center">
+                  <div className="text-sm text-gray-400 mb-1">Auto-Bet Active</div>
+                  <div className="text-lg font-bold">Running...</div>
+                </div>
+              </div>
+            )}
 
             <div className="card">
               <h3 className="text-xl font-bold mb-4">Live Stats</h3>

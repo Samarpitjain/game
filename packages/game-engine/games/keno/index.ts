@@ -83,23 +83,24 @@ export class KenoGame extends BaseGame {
     const matchedNumbers = selectedNumbers.filter(n => drawnNumbers.includes(n));
     const matchCount = matchedNumbers.length;
 
-    // Get multiplier
+    // Get multiplier and apply house edge
     const multiplierTable = this.multiplierTables[risk][selectedNumbers.length];
-    const multiplier = multiplierTable[matchCount] || 0;
+    const baseMultiplier = multiplierTable[matchCount] || 0;
+    const finalMultiplier = baseMultiplier * (1 - this.config.houseEdge / 100);
 
-    const won = multiplier > 0;
-    const payout = this.calculatePayout(input.amount, multiplier);
+    const won = finalMultiplier >= 1;
+    const payout = this.calculatePayout(input.amount, finalMultiplier);
     const profit = this.calculateProfit(input.amount, payout);
 
     const result: KenoResult = {
       drawnNumbers,
       matchedNumbers,
       matchCount,
-      multiplier,
+      multiplier: finalMultiplier,
     };
 
     return {
-      multiplier,
+      multiplier: finalMultiplier,
       payout,
       profit,
       won,

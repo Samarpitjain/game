@@ -5,8 +5,13 @@ import { walletAPI } from '@/lib/api';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { io, Socket } from 'socket.io-client';
+import BetModeSelector from '@/components/betting/BetModeSelector';
+import ManualBetControls from '@/components/betting/ManualBetControls';
+
+type BetMode = 'manual';
 
 export default function CrashPage() {
+  const [betMode, setBetMode] = useState<BetMode>('manual');
   const [amount, setAmount] = useState(10);
   const [autoCashout, setAutoCashout] = useState(2);
   const [balance, setBalance] = useState(0);
@@ -231,29 +236,31 @@ export default function CrashPage() {
 
           <div className="space-y-6">
             <div className="card">
-              <h3 className="text-xl font-bold mb-4">Bet Controls</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Bet Amount</label>
-                  <input
-                    type="number"
-                    value={amount}
-                    onChange={(e) => setAmount(Number(e.target.value))}
-                    className="w-full bg-gray-800 rounded-lg px-4 py-2"
-                    disabled={gameState !== 'betting' || myBet}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-2">Auto Cashout</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={autoCashout}
-                    onChange={(e) => setAutoCashout(Number(e.target.value))}
-                    className="w-full bg-gray-800 rounded-lg px-4 py-2"
-                    disabled={gameState !== 'betting' || myBet}
-                  />
-                </div>
+              <BetModeSelector
+                mode={betMode}
+                onChange={setBetMode}
+                showStrategy={false}
+              />
+
+              <ManualBetControls
+                amount={amount}
+                balance={balance}
+                onAmountChange={setAmount}
+                onBet={placeBet}
+                disabled={gameState !== 'betting' || myBet}
+                loading={false}
+              />
+
+              <div className="mt-4">
+                <label className="block text-sm text-gray-400 mb-2">Auto Cashout</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={autoCashout}
+                  onChange={(e) => setAutoCashout(Number(e.target.value))}
+                  className="input w-full"
+                  disabled={gameState !== 'betting' || myBet}
+                />
               </div>
             </div>
 

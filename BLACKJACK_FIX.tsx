@@ -1,37 +1,52 @@
+// FIXED Blackjack page with proper shared component usage
+
 'use client';
 
 import { useState, useEffect } from 'react';
-import { walletAPI, hiloAPI, betAPI } from '@/lib/api';
+import { walletAPI, blackjackAPI, betAPI } from '@/lib/api';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { useAutoBetSocket } from '@/hooks/useAutoBetSocket';
 import BetModeSelector from '@/components/betting/BetModeSelector';
 import ManualBetControls from '@/components/betting/ManualBetControls';
 import AutoBetControls, { AutoBetConfig } from '@/components/betting/AutoBetControls';
-import HiLoGameControls from '@/components/games/hilo/HiLoGameControls';
+import BlackjackGameControls from '@/components/games/blackjack/BlackjackGameControls';
 import FairnessModal from '@/components/games/FairnessModal';
+
+interface Card {
+  rank: string;
+  suit: string;
+  value: number;
+}
 
 type BetMode = 'manual' | 'auto';
 
-export default function HiLoPage() {
+export default function BlackjackPage() {
+  // ✅ ADDED: Bet mode state
   const [betMode, setBetMode] = useState<BetMode>('manual');
   const [amount, setAmount] = useState(10);
   const [loading, setLoading] = useState(false);
   const [balance, setBalance] = useState(0);
   const [stats, setStats] = useState({ profit: 0, wins: 0, losses: 0, wagered: 0 });
-  const [autoBetActive, setAutoBetActive] = useState(false);
   const [fairnessModalOpen, setFairnessModalOpen] = useState(false);
+  
+  // ✅ ADDED: AutoBet state
+  const [autoBetActive, setAutoBetActive] = useState(false);
   const [userId, setUserId] = useState<string>();
 
   const [gameActive, setGameActive] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [currentCard, setCurrentCard] = useState<number | undefined>();
-  const [cardHistory, setCardHistory] = useState<number[]>([]);
-  const [currentMultiplier, setCurrentMultiplier] = useState(1);
+  const [playerHands, setPlayerHands] = useState<Card[][]>([]);
+  const [dealerHand, setDealerHand] = useState<Card[]>([]);
+  const [playerTotals, setPlayerTotals] = useState<number[]>([]);
+  const [dealerTotal, setDealerTotal] = useState(0);
+  const [canHit, setCanHit] = useState(true);
+  const [canDouble, setCanDouble] = useState(true);
   const [gameOver, setGameOver] = useState(false);
 
   useEffect(() => {
     loadBalance();
+    // ✅ ADDED: Get userId for AutoBet socket
     const token = localStorage.getItem('token');
     if (token) {
       const payload = JSON.parse(atob(token.split('.')[1]));
@@ -39,12 +54,25 @@ export default function HiLoPage() {
     }
   }, []);
 
+  // ✅ ADDED: AutoBet socket support
   useAutoBetSocket(userId, (data) => {
+    console.log('Blackjack AutoBet result:', data);
     if (data.wallet) setBalance(data.wallet.balance);
+    
     if (data.bet.won) {
-      setStats(s => ({ ...s, wins: s.wins + 1, profit: s.profit + data.bet.profit, wagered: s.wagered + data.bet.amount }));
+      setStats(s => ({ 
+        ...s, 
+        wins: s.wins + 1, 
+        profit: s.profit + data.bet.profit, 
+        wagered: s.wagered + data.bet.amount 
+      }));
     } else {
-      setStats(s => ({ ...s, losses: s.losses + 1, profit: s.profit + data.bet.profit, wagered: s.wagered + data.bet.amount }));
+      setStats(s => ({ 
+        ...s, 
+        losses: s.losses + 1, 
+        profit: s.profit + data.bet.profit, 
+        wagered: s.wagered + data.bet.amount 
+      }));
     }
   });
 
@@ -66,16 +94,19 @@ export default function HiLoPage() {
 
     setLoading(true);
     try {
-      const response = await hiloAPI.start({
+      const response = await blackjackAPI.start({
         betAmount: amount,
         currency: 'USD',
       });
 
       setSessionId(response.data.sessionId);
-      setCurrentCard(response.data.currentCard);
-      setCurrentMultiplier(response.data.currentMultiplier);
+      setPlayerHands(response.data.playerHands);
+      setDealerHand(response.data.dealerHand);
+      setPlayerTotals(response.data.playerTotals);
+      setDealerTotal(response.data.dealerTotal);
+      setCanHit(response.data.canHit);
+      setCanDouble(response.data.canDouble);
       setGameActive(true);
-      setCardHistory([]);
       setGameOver(false);
       toast.success('Game started!');
       await loadBalance();
@@ -86,66 +117,18 @@ export default function HiLoPage() {
     }
   };
 
-  const makeChoice = async (choice: 'higher' | 'lower' | 'skip') => {
-    if (!sessionId || gameOver) return;
-
-    setLoading(true);
-    try {
-      const response = await hiloAPI.predict({
-        sessionId,
-        choice,
-      });
-
-      if (response.data.won) {
-        setCurrentCard(response.data.currentCard);
-        setCurrentMultiplier(response.data.currentMultiplier);
-        setCardHistory(response.data.cardHistory);
-        toast.success(`Correct! ${response.data.currentMultiplier.toFixed(2)}x`);
-      } else {
-        setGameOver(true);
-        setGameActive(false);
-        toast.error('Wrong prediction! Game over');
-        setStats(s => ({ ...s, losses: s.losses + 1, profit: s.profit - amount, wagered: s.wagered + amount }));
-        await loadBalance();
-      }
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to make prediction');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const cashOut = async () => {
-    if (!sessionId) return;
-
-    setLoading(true);
-    try {
-      const response = await hiloAPI.cashout({ sessionId });
-      
-      toast.success(`Cashed out! Won $${response.data.profit.toFixed(2)}`);
-      setGameActive(false);
-      setGameOver(true);
-      
-      setStats(s => ({ ...s, wins: s.wins + 1, profit: s.profit + response.data.profit, wagered: s.wagered + amount }));
-      await loadBalance();
-    } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to cash out');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // ✅ ADDED: AutoBet handlers
   const handleStartAutoBet = async (config: AutoBetConfig) => {
     try {
       await betAPI.startAutobet({
-        gameType: 'HILO',
+        gameType: 'BLACKJACK',
         currency: 'USD',
         amount,
-        gameParams: {},
+        gameParams: {}, // Blackjack has no game params
         config,
       });
       setAutoBetActive(true);
-      toast.success('Auto-bet started');
+      toast.success('Auto-bet started - Real-time updates enabled');
     } catch (error: any) {
       toast.error(error.response?.data?.error || 'Failed to start auto-bet');
     }
@@ -162,20 +145,112 @@ export default function HiLoPage() {
     }
   };
 
+  const handleHit = async () => {
+    if (!sessionId) return;
+
+    setLoading(true);
+    try {
+      const response = await blackjackAPI.hit({ sessionId });
+
+      setPlayerHands(response.data.playerHands);
+      setDealerHand(response.data.dealerHand);
+      setPlayerTotals(response.data.playerTotals);
+      setDealerTotal(response.data.dealerTotal);
+      setCanHit(response.data.canHit);
+      setCanDouble(false);
+
+      if (response.data.bust) {
+        toast.error('Bust! You lose');
+        setGameOver(true);
+        setGameActive(false);
+        setStats(s => ({ ...s, losses: s.losses + 1, profit: s.profit - amount, wagered: s.wagered + amount }));
+        await loadBalance();
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to hit');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStand = async () => {
+    if (!sessionId) return;
+
+    setLoading(true);
+    try {
+      const response = await blackjackAPI.stand({ sessionId });
+
+      setPlayerHands(response.data.playerHands);
+      setDealerHand(response.data.dealerHand);
+      setPlayerTotals(response.data.playerTotals);
+      setDealerTotal(response.data.dealerTotal);
+      setGameOver(true);
+      setGameActive(false);
+
+      if (response.data.won) {
+        toast.success(`You win! +$${response.data.profit.toFixed(2)}`);
+        setStats(s => ({ ...s, wins: s.wins + 1, profit: s.profit + response.data.profit, wagered: s.wagered + amount }));
+      } else if (response.data.multiplier === 1) {
+        toast.info('Push! Bet returned');
+        setStats(s => ({ ...s, wagered: s.wagered + amount }));
+      } else {
+        toast.error('Dealer wins');
+        setStats(s => ({ ...s, losses: s.losses + 1, profit: s.profit - amount, wagered: s.wagered + amount }));
+      }
+
+      await loadBalance();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to stand');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDouble = async () => {
+    if (!sessionId) return;
+
+    setLoading(true);
+    try {
+      const response = await blackjackAPI.double({ sessionId });
+
+      setPlayerHands(response.data.playerHands);
+      setDealerHand(response.data.dealerHand);
+      setPlayerTotals(response.data.playerTotals);
+      setDealerTotal(response.data.dealerTotal);
+      setGameOver(true);
+      setGameActive(false);
+
+      if (response.data.won) {
+        toast.success(`You win! +$${response.data.profit.toFixed(2)}`);
+        setStats(s => ({ ...s, wins: s.wins + 1, profit: s.profit + response.data.profit, wagered: s.wagered + amount * 2 }));
+      } else {
+        toast.error('You lose');
+        setStats(s => ({ ...s, losses: s.losses + 1, profit: s.profit - amount * 2, wagered: s.wagered + amount * 2 }));
+      }
+
+      await loadBalance();
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to double');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const resetGame = () => {
     setGameActive(false);
     setGameOver(false);
-    setCurrentCard(undefined);
-    setCardHistory([]);
+    setPlayerHands([]);
+    setDealerHand([]);
     setSessionId(null);
-    setCurrentMultiplier(1);
+    setCanHit(true);
+    setCanDouble(true);
   };
 
   return (
     <div className="min-h-screen bg-gray-900">
       <header className="border-b border-gray-800">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link href="/" className="text-2xl font-bold gradient-text">← HiLo</Link>
+          <Link href="/" className="text-2xl font-bold gradient-text">← Blackjack</Link>
           <div className="flex items-center gap-4">
             <button
               onClick={() => setFairnessModalOpen(true)}
@@ -195,31 +270,28 @@ export default function HiLoPage() {
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <div className="card">
-              <h2 className="text-2xl font-bold mb-6">HiLo</h2>
+              <h2 className="text-2xl font-bold mb-6">Blackjack</h2>
 
               {gameActive && (
-                <div className="mb-4 p-4 bg-blue-900/20 border border-blue-500 rounded-lg text-center">
-                  <div className="text-sm text-gray-400">Current Multiplier</div>
-                  <div className="text-3xl font-bold text-primary">{currentMultiplier.toFixed(2)}x</div>
-                  <div className="text-sm text-gray-400 mt-1">Potential Win: ${(amount * currentMultiplier).toFixed(2)}</div>
-                  <div className="text-sm text-gray-400 mt-1">Cards Played: {cardHistory.length}</div>
-                </div>
+                <BlackjackGameControls
+                  playerHands={playerHands}
+                  dealerHand={dealerHand}
+                  playerTotals={playerTotals}
+                  dealerTotal={dealerTotal}
+                  onHit={handleHit}
+                  onStand={handleStand}
+                  onDouble={handleDouble}
+                  canHit={canHit}
+                  canDouble={canDouble}
+                  disabled={loading}
+                  gameOver={gameOver}
+                />
               )}
 
-              <HiLoGameControls
-                currentCard={currentCard}
-                onChoice={makeChoice}
-                disabled={loading || !gameActive || gameOver}
-              />
-
-              {gameActive && !gameOver && cardHistory.length > 0 && (
-                <button
-                  onClick={cashOut}
-                  disabled={loading}
-                  className="btn-primary w-full py-3 mt-4"
-                >
-                  Cash Out ${(amount * currentMultiplier).toFixed(2)}
-                </button>
+              {!gameActive && !gameOver && (
+                <div className="text-center py-12 text-gray-400">
+                  Place a bet to start playing
+                </div>
               )}
 
               {gameOver && (
@@ -234,6 +306,7 @@ export default function HiLoPage() {
           </div>
 
           <div className="space-y-6">
+            {/* ✅ FIXED: Now using shared components properly */}
             <div className="card">
               <BetModeSelector
                 mode={betMode}
@@ -241,6 +314,7 @@ export default function HiLoPage() {
                 showStrategy={false}
               />
 
+              {/* Manual Bet */}
               {betMode === 'manual' && !gameActive && (
                 <ManualBetControls
                   amount={amount}
@@ -252,14 +326,21 @@ export default function HiLoPage() {
                 />
               )}
 
+              {/* Auto Bet */}
               {betMode === 'auto' && (
-                <div className="text-center py-8 text-gray-400">
-                  <div className="text-lg mb-2">⚠️ AutoBet Not Available</div>
-                  <div className="text-sm">This game requires manual play due to its interactive nature.</div>
-                </div>
+                <AutoBetControls
+                  amount={amount}
+                  balance={balance}
+                  onAmountChange={setAmount}
+                  onStart={handleStartAutoBet}
+                  onStop={handleStopAutoBet}
+                  isActive={autoBetActive}
+                  disabled={loading || amount <= 0 || amount > balance}
+                />
               )}
             </div>
 
+            {/* ✅ ADDED: AutoBet Status */}
             {autoBetActive && (
               <div className="card bg-blue-900/20 border border-blue-500">
                 <div className="text-center">
@@ -306,3 +387,11 @@ export default function HiLoPage() {
     </div>
   );
 }
+
+// ✅ CHANGES MADE:
+// 1. Added BetModeSelector component
+// 2. Added AutoBetControls component  
+// 3. Added AutoBet state and handlers
+// 4. Added AutoBet socket support
+// 5. Added AutoBet status display
+// 6. Now consistent with other games

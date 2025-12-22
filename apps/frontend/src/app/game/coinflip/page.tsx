@@ -9,6 +9,8 @@ import BetModeSelector from '@/components/betting/BetModeSelector';
 import ManualBetControls from '@/components/betting/ManualBetControls';
 import AutoBetControls, { AutoBetConfig } from '@/components/betting/AutoBetControls';
 import CoinFlipGameControls, { CoinFlipGameParams } from '@/components/games/coinflip/CoinFlipGameControls';
+import CoinAnimation from '@/components/games/coinflip/CoinAnimation';
+import JackpotTracker from '@/components/games/coinflip/JackpotTracker';
 import FairnessModal from '@/components/games/FairnessModal';
 
 type BetMode = 'manual' | 'auto' | 'strategy';
@@ -21,6 +23,8 @@ export default function CoinFlipPage() {
     mode: 'normal',
     seriesCount: 3,
   });
+  const [isFlipping, setIsFlipping] = useState(false);
+  const [jackpotStats, setJackpotStats] = useState({ currentStreak: 0, remainingBets: 0 });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [balance, setBalance] = useState(0);
@@ -66,6 +70,12 @@ export default function CoinFlipPage() {
     }
 
     setLoading(true);
+    setIsFlipping(true);
+    setResult(null);
+    
+    // Simulate flip duration
+    setTimeout(() => setIsFlipping(false), 2000);
+    
     try {
       const response = await betAPI.place({
         gameType: 'COINFLIP',
@@ -143,17 +153,29 @@ export default function CoinFlipPage() {
             <div className="card">
               <h2 className="text-2xl font-bold mb-6">Coin Flip</h2>
 
-              {result && (
-                <div className={`mb-6 p-6 rounded-lg text-center ${result.won ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
-                  <div className="text-6xl font-bold mb-2">{result.result === 'heads' ? '🪙 HEADS' : '🪙 TAILS'}</div>
-                  <div className="text-2xl mb-2">{result.won ? '🎉 WIN!' : '😢 LOST'}</div>
-                  {result.seriesResults && (
-                    <div className="text-sm text-gray-400 mt-2">
-                      Series: {result.seriesWins}/{result.seriesResults.length} wins
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="mb-6">
+                <CoinAnimation 
+                  result={result?.result}
+                  isFlipping={isFlipping}
+                  seriesResults={result?.seriesResults}
+                />
+                
+                {result && !isFlipping && (
+                  <div className={`mt-4 p-4 rounded-lg text-center ${result.won ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
+                    <div className="text-2xl mb-2">{result.won ? '🎉 WIN!' : '😢 LOST'}</div>
+                    {result.seriesResults && (
+                      <div className="text-sm text-gray-400">
+                        Series: {result.seriesWins}/{result.seriesResults.length} wins
+                      </div>
+                    )}
+                    {result.jackpotWon && (
+                      <div className="text-lg text-special font-bold mt-2">
+                        🎰 JACKPOT WON! ${result.jackpotAmount?.toFixed(2)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <CoinFlipGameControls onChange={setGameParams} disabled={loading || autoBetActive} />
             </div>
@@ -171,6 +193,7 @@ export default function CoinFlipPage() {
                   onBet={placeBet}
                   disabled={autoBetActive}
                   loading={loading}
+                  multiplier={gameParams.mode === 'normal' ? 1.98 : gameParams.mode === 'series' ? 1.98 * gameParams.seriesCount : undefined}
                 />
               )}
 
@@ -190,6 +213,14 @@ export default function CoinFlipPage() {
                 <div className="text-center py-8 text-gray-400">Strategy mode coming soon...</div>
               )}
             </div>
+
+            {gameParams.mode === 'jackpot' && (
+              <JackpotTracker 
+                condition={gameParams.jackpotCondition}
+                currentStreak={jackpotStats.currentStreak}
+                remainingBets={jackpotStats.remainingBets}
+              />
+            )}
 
             {autoBetActive && (
               <div className="card bg-blue-900/20 border border-blue-500">
