@@ -1,35 +1,32 @@
-import { prisma, GameType, Currency, JackpotStatus } from '@casino/database';
+import { Jackpot, JackpotWin, JackpotStatus, GameType, Currency, Bet } from '@casino/database';
 import { WalletService } from './wallet-service';
 import { EventEmitter } from 'events';
+import mongoose from 'mongoose';
 
 export const jackpotEvents = new EventEmitter();
 
 /**
- * Jackpot Service - manages jackpot pools and winners
+ * Jackpot Service - manages jackpot pools and winners with MongoDB
  */
 export class JackpotService {
   /**
    * Get or create jackpot for game/currency
    */
-  static async getJackpot(gameType?: GameType, currency?: Currency) {
-    let jackpot = await prisma.jackpot.findFirst({
-      where: {
-        gameType: gameType || null,
-        currency: currency || null,
-      },
+  static async getJackpot(gameType?: string, currency?: string) {
+    let jackpot = await Jackpot.findOne({
+      gameType: gameType || null,
+      currency: currency || null,
     });
 
     if (!jackpot) {
-      jackpot = await prisma.jackpot.create({
-        data: {
-          gameType: gameType || null,
-          currency: currency || null,
-          currentAmount: 0,
-          minAmount: 100, // Default minimum
-          status: JackpotStatus.REFILLING,
-          houseEdgePercent: 1,
-          conditions: {},
-        },
+      jackpot = await Jackpot.create({
+        gameType: gameType || null,
+        currency: currency || null,
+        currentAmount: 0,
+        minAmount: 100,
+        status: JackpotStatus.REFILLING,
+        houseEdgePercent: 1,
+        conditions: { randomChance: 0.0001, minBet: 0 },
       });
     }
 
@@ -39,37 +36,29 @@ export class JackpotService {
   /**
    * Add to jackpot pool from house edge
    */
-  static async addToPool(gameType: GameType, currency: Currency, betAmount: number) {
+  static async addToPool(gameType: string, currency: string, betAmount: number) {
     const jackpot = await this.getJackpot(gameType, currency);
     
-    // Calculate contribution (percentage of house edge)
-    const contribution = betAmount * (jackpot.houseEdgePercent / 100) * 0.1; // 10% of house edge
+    const contribution = betAmount * (jackpot.houseEdgePercent / 100) * 0.1;
 
-    const updated = await prisma.jackpot.update({
-      where: { id: jackpot.id },
-      data: {
-        currentAmount: { increment: contribution },
-      },
-    });
+    const updated = await Jackpot.findByIdAndUpdate(
+      jackpot._id,
+      { $inc: { currentAmount: contribution } },
+      { new: true }
+    );
 
-    // Update status based on amount
-    await this.updateJackpotStatus(updated.id);
-
+    await this.updateJackpotStatus(updated!._id.toString());
     return updated;
   }
 
   /**
-   * Update jackpot status based on current amount
+   * Update jackpot status
    */
   private static async updateJackpotStatus(jackpotId: string) {
-    const jackpot = await prisma.jackpot.findUnique({
-      where: { id: jackpotId },
-    });
-
+    const jackpot = await Jackpot.findById(jackpotId);
     if (!jackpot) return;
 
     let newStatus = jackpot.status;
-
     if (jackpot.currentAmount < jackpot.minAmount) {
       newStatus = JackpotStatus.REFILLING;
     } else if (jackpot.currentAmount >= jackpot.minAmount * 5) {
@@ -79,36 +68,24 @@ export class JackpotService {
     }
 
     if (newStatus !== jackpot.status) {
-      await prisma.jackpot.update({
-        where: { id: jackpotId },
-        data: { status: newStatus },
-      });
+      await Jackpot.findByIdAndUpdate(jackpotId, { status: newStatus });
     }
   }
 
   /**
-   * Check if bet wins jackpot
+   * Check jackpot conditions for specific games
    */
-  static async checkJackpot(betId: string, gameType: GameType, currency: Currency, betAmount: number) {
+  static async checkJackpotConditions(betId: string, gameType: string, currency: string, betAmount: number, gameResult: any) {
     const jackpot = await this.getJackpot(gameType, currency);
+    
+    if (jackpot.status === JackpotStatus.REFILLING) return false;
+    if (betAmount < (jackpot.conditions?.minBet || 0)) return false;
 
-    // Check if jackpot is ready
-    if (jackpot.status === JackpotStatus.REFILLING) {
-      return false;
-    }
-
-    // Check minimum bet requirement
-    const minBet = jackpot.conditions?.minBet || 0;
-    if (betAmount < minBet) {
-      return false;
-    }
-
-    // Random chance (configurable per jackpot)
-    const randomChance = jackpot.conditions?.randomChance || 0.0001; // 0.01% default
-    const won = Math.random() < randomChance;
-
+    // Game-specific jackpot conditions
+    const won = await this.evaluateGameConditions(gameType, gameResult, jackpot.conditions);
+    
     if (won) {
-      await this.awardJackpot(jackpot.id, betId);
+      await this.awardJackpot(jackpot._id.toString(), betId);
       return true;
     }
 
@@ -116,82 +93,132 @@ export class JackpotService {
   }
 
   /**
+   * Evaluate game-specific jackpot conditions
+   */
+  private static async evaluateGameConditions(gameType: string, gameResult: any, conditions: any): Promise<boolean> {
+    switch (gameType) {
+      case 'DICE':
+        return this.checkDiceConditions(gameResult, conditions);
+      case 'LIMBO':
+        return this.checkLimboConditions(gameResult, conditions);
+      case 'CRASH':
+        return this.checkCrashConditions(gameResult, conditions);
+      case 'MINES':
+        return this.checkMinesConditions(gameResult, conditions);
+      case 'PLINKO':
+        return this.checkPlinkoConditions(gameResult, conditions);
+      case 'ROULETTE':
+        return this.checkRouletteConditions(gameResult, conditions);
+      default:
+        return Math.random() < (conditions?.chancePerBet || 0.0001);
+    }
+  }
+
+  private static checkDiceConditions(result: any, conditions: any): boolean {
+    const { roll } = result;
+    if (conditions.targets?.includes(roll)) return true;
+    return Math.random() < (conditions.chancePerBet || 0.001);
+  }
+
+  private static checkLimboConditions(result: any, conditions: any): boolean {
+    const { multiplier } = result;
+    if (conditions.targets?.includes(multiplier)) return true;
+    return Math.random() < (conditions.chancePerBet || 0.001);
+  }
+
+  private static checkCrashConditions(result: any, conditions: any): boolean {
+    const { crashPoint } = result;
+    if (conditions.targets?.includes(crashPoint)) return true;
+    return Math.random() < (conditions.chancePerBet || 0.001);
+  }
+
+  private static checkMinesConditions(result: any, conditions: any): boolean {
+    return Math.random() < (conditions.chancePerAction || 0.005);
+  }
+
+  private static checkPlinkoConditions(result: any, conditions: any): boolean {
+    return Math.random() < (conditions.chancePerBet || 0.001);
+  }
+
+  private static checkRouletteConditions(result: any, conditions: any): boolean {
+    const { number, color } = result;
+    return Math.random() < (conditions.chancePerBet || 0.001);
+  }
+
+  /**
    * Award jackpot to winner
    */
   private static async awardJackpot(jackpotId: string, betId: string) {
-    const jackpot = await prisma.jackpot.findUnique({
-      where: { id: jackpotId },
-    });
+    const session = await mongoose.startSession();
+    
+    try {
+      await session.withTransaction(async () => {
+        const jackpot = await Jackpot.findById(jackpotId).session(session);
+        const bet = await Bet.findById(betId).session(session);
 
-    const bet = await prisma.bet.findUnique({
-      where: { id: betId },
-    });
+        if (!jackpot || !bet) return;
 
-    if (!jackpot || !bet) return;
+        await Jackpot.findByIdAndUpdate(
+          jackpotId,
+          { status: JackpotStatus.CALCULATING },
+          { session }
+        );
 
-    // Set status to calculating
-    await prisma.jackpot.update({
-      where: { id: jackpotId },
-      data: { status: JackpotStatus.CALCULATING },
-    });
+        await WalletService.creditBalanceWithSession(
+          bet.userId.toString(),
+          bet.currency,
+          jackpot.currentAmount,
+          session
+        );
 
-    // Award jackpot to user
-    await WalletService.addBalance(bet.userId, bet.currency, jackpot.currentAmount);
+        await JackpotWin.create([{
+          jackpotId: jackpot._id,
+          userId: bet.userId,
+          amount: jackpot.currentAmount,
+          currency: bet.currency,
+        }], { session });
 
-    // Record win
-    await prisma.jackpotWin.create({
-      data: {
-        jackpotId,
-        userId: bet.userId,
-        amount: jackpot.currentAmount,
-        currency: bet.currency,
-      },
-    });
+        await Jackpot.findByIdAndUpdate(
+          jackpotId,
+          {
+            currentAmount: 0,
+            status: JackpotStatus.REFILLING,
+            lastWinnerId: bet.userId,
+            lastWinAmount: jackpot.currentAmount,
+            lastWinAt: new Date(),
+          },
+          { session }
+        );
 
-    // Reset jackpot
-    await prisma.jackpot.update({
-      where: { id: jackpotId },
-      data: {
-        currentAmount: 0,
-        status: JackpotStatus.REFILLING,
-        lastWinnerId: bet.userId,
-        lastWinAmount: jackpot.currentAmount,
-        lastWinAt: new Date(),
-      },
-    });
-
-    // Emit event
-    jackpotEvents.emit('jackpot-won', {
-      userId: bet.userId,
-      amount: jackpot.currentAmount,
-      currency: bet.currency,
-      gameType: jackpot.gameType,
-    });
+        setImmediate(() => {
+          jackpotEvents.emit('jackpot-won', {
+            userId: bet.userId.toString(),
+            amount: jackpot.currentAmount,
+            currency: bet.currency,
+            gameType: jackpot.gameType,
+          });
+        });
+      });
+    } finally {
+      await session.endSession();
+    }
   }
 
   /**
    * Get all active jackpots
    */
   static async getAllJackpots() {
-    return prisma.jackpot.findMany({
-      orderBy: { currentAmount: 'desc' },
-    });
+    return Jackpot.find().sort({ currentAmount: -1 });
   }
 
   /**
    * Get jackpot winners
    */
   static async getJackpotWinners(limit = 50) {
-    return prisma.jackpotWin.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      include: {
-        jackpot: {
-          select: {
-            gameType: true,
-          },
-        },
-      },
-    });
+    return JackpotWin.find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .populate('jackpotId', 'gameType')
+      .populate('userId', 'username');
   }
 }

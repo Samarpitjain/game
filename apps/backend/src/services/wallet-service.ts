@@ -219,35 +219,64 @@ export class WalletService {
   }
 
   /**
-   * Transfer between currencies (for swaps)
+   * Debit balance with session support
    */
-  static async transfer(
-    userId: string,
-    fromCurrency: Currency,
-    toCurrency: Currency,
-    amount: number,
-    rate: number
-  ) {
-    const convertedAmount = amount * rate;
-    const session = await mongoose.startSession();
-    
-    try {
-      await session.withTransaction(async () => {
-        const fromWallet = await Wallet.findOne({ userId, currency: fromCurrency }).session(session);
-        const toWallet = await Wallet.findOne({ userId, currency: toCurrency }).session(session);
-        
-        if (!fromWallet || !toWallet) throw new Error('Wallet not found');
-        
-        fromWallet.balance -= amount;
-        toWallet.balance += convertedAmount;
-        
-        await fromWallet.save({ session });
-        await toWallet.save({ session });
-      });
-    } finally {
-      session.endSession();
+  static async debitBalanceWithSession(userId: string, currency: Currency, amount: number, session: mongoose.ClientSession) {
+    const wallet = await Wallet.findOne({ userId, currency }).session(session);
+    if (!wallet) {
+      // Create wallet if it doesn't exist
+      const [newWallet] = await Wallet.create([{
+        userId,
+        currency,
+        balance: 0,
+        lockedBalance: 0,
+      }], { session });
+      throw new Error('Insufficient balance');
     }
+    
+    if (wallet.balance < amount) throw new Error('Insufficient balance');
+    
+    wallet.balance -= amount;
+    await wallet.save({ session });
+    return wallet;
+  }
 
-    return convertedAmount;
+  /**
+   * Credit balance with session support
+   */
+  static async creditBalanceWithSession(userId: string, currency: Currency, amount: number, session: mongoose.ClientSession) {
+    const wallet = await Wallet.findOne({ userId, currency }).session(session);
+    if (!wallet) {
+      const [newWallet] = await Wallet.create([{
+        userId,
+        currency,
+        balance: amount,
+        lockedBalance: 0,
+      }], { session });
+      return newWallet;
+    }
+    
+    wallet.balance += amount;
+    await wallet.save({ session });
+    return wallet;
+  }
+
+  /**
+   * Get wallet with session support
+   */
+  static async getWalletWithSession(userId: string, currency: Currency, session: mongoose.ClientSession) {
+    let wallet = await Wallet.findOne({ userId, currency }).session(session);
+    
+    if (!wallet) {
+      const [newWallet] = await Wallet.create([{
+        userId,
+        currency,
+        balance: 0,
+        lockedBalance: 0,
+      }], { session });
+      return newWallet;
+    }
+    
+    return wallet;
   }
 }

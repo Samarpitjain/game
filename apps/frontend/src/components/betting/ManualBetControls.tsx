@@ -10,6 +10,7 @@ interface ManualBetControlsProps {
   disabled?: boolean;
   loading?: boolean;
   multiplier?: number;
+  buttonText?: string;
 }
 
 export default function ManualBetControls({
@@ -20,6 +21,7 @@ export default function ManualBetControls({
   disabled = false,
   loading = false,
   multiplier,
+  buttonText = 'Bet',
 }: ManualBetControlsProps) {
   return (
     <div className="card">
@@ -65,7 +67,7 @@ export default function ManualBetControls({
         disabled={disabled || loading || amount <= 0 || amount > balance}
         className="btn-primary w-full py-4 text-xl disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {loading ? 'Betting...' : `Bet $${amount.toFixed(2)}`}
+        {loading ? `${buttonText}ting...` : `${buttonText} $${amount.toFixed(2)}`}
       </button>
     </div>
   );

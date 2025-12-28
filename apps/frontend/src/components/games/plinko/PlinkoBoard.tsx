@@ -4,23 +4,31 @@ import { useState, useEffect, useRef } from 'react';
 
 interface PlinkoBoardProps {
   rows: number;
-  risk: 'low' | 'medium' | 'high';
+  risk: 'low' | 'medium' | 'high' | 'lightning-low' | 'lightning-medium' | 'lightning-high';
   result?: {
     path: number[];
     finalSlot: number;
     multiplier: number;
+    goldenPegs?: Array<{ row: number; position: number; multiplier: number }>;
+    deadZones?: number[];
+    goldenPegHits?: Array<{ row: number; position: number; multiplier: number }>;
   };
   isDropping: boolean;
   superMode?: boolean;
+  goldenPegs?: Array<{ row: number; position: number; multiplier: number }>;
+  deadZones?: number[];
 }
 
-export default function PlinkoBoard({ rows, risk, result, isDropping, superMode }: PlinkoBoardProps) {
+export default function PlinkoBoard({ rows, risk, result, isDropping, superMode, goldenPegs, deadZones }: PlinkoBoardProps) {
   const [ballPosition, setBallPosition] = useState({ x: 50, y: 0 });
   const [animationKey, setAnimationKey] = useState(0);
   const boardRef = useRef<HTMLDivElement>(null);
 
+  const isLightningMode = risk.startsWith('lightning-');
+
   // Generate multipliers based on risk and rows
   const getMultipliers = () => {
+    const baseRisk = risk.replace('lightning-', '') as 'low' | 'medium' | 'high';
     const multipliers: { [key: string]: number[] } = {
       low: {
         8: [5.6, 2.1, 1.1, 1, 0.5, 1, 1.1, 2.1, 5.6],
@@ -39,11 +47,22 @@ export default function PlinkoBoard({ rows, risk, result, isDropping, superMode 
       }
     };
     
-    const baseMultipliers = multipliers[risk][rows as keyof typeof multipliers[typeof risk]] || multipliers[risk][12];
+    const baseMultipliers = multipliers[baseRisk][rows as keyof typeof multipliers[typeof baseRisk]] || multipliers[baseRisk][12];
     return superMode ? baseMultipliers.map(m => m * 1.5) : baseMultipliers;
   };
 
   const multipliers = getMultipliers();
+
+  const isGoldenPeg = (rowIndex: number, pegIndex: number) => {
+    if (!goldenPegs) return false;
+    return goldenPegs.some(peg => peg.row === rowIndex && peg.position === pegIndex);
+  };
+
+  const getGoldenPegMultiplier = (rowIndex: number, pegIndex: number) => {
+    if (!goldenPegs) return 0;
+    const peg = goldenPegs.find(p => p.row === rowIndex && p.position === pegIndex);
+    return peg?.multiplier || 0;
+  };
 
   useEffect(() => {
     if (isDropping && result) {
@@ -110,16 +129,31 @@ export default function PlinkoBoard({ rows, risk, result, isDropping, superMode 
                 right: '0'
               }}
             >
-              {Array.from({ length: rowIndex + 2 }, (_, pegIndex) => (
-                <div
-                  key={pegIndex}
-                  className="w-2 h-2 bg-gray-400 rounded-full mx-1"
-                  style={{
-                    marginLeft: `${100 / (rowIndex + 3)}%`,
-                    marginRight: `${100 / (rowIndex + 3)}%`
-                  }}
-                />
-              ))}
+              {Array.from({ length: rowIndex + 2 }, (_, pegIndex) => {
+                const golden = isGoldenPeg(rowIndex, pegIndex);
+                const multiplier = getGoldenPegMultiplier(rowIndex, pegIndex);
+                
+                return (
+                  <div key={pegIndex} className="relative">
+                    <div
+                      className={`w-3 h-3 rounded-full mx-1 transition-all ${
+                        golden 
+                          ? 'bg-gradient-to-br from-yellow-300 to-yellow-600 shadow-lg shadow-yellow-500/50 animate-pulse' 
+                          : 'bg-white shadow-lg shadow-white/30'
+                      }`}
+                      style={{
+                        marginLeft: `${100 / (rowIndex + 3)}%`,
+                        marginRight: `${100 / (rowIndex + 3)}%`
+                      }}
+                    />
+                    {golden && (
+                      <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 text-xs font-bold text-yellow-400 whitespace-nowrap">
+                        {multiplier}x
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </div>
@@ -161,18 +195,28 @@ export default function PlinkoBoard({ rows, risk, result, isDropping, superMode 
 
       {/* Multiplier Slots */}
       <div className="grid gap-1 mt-2" style={{ gridTemplateColumns: `repeat(${multipliers.length}, 1fr)` }}>
-        {multipliers.map((multiplier, index) => (
-          <div
-            key={index}
-            className={`py-2 px-1 text-center text-xs font-bold rounded ${getSlotColor(multiplier)} ${
-              result && result.finalSlot === index ? 'ring-2 ring-white animate-pulse' : ''
-            }`}
-          >
-            {multiplier >= 1000 ? `${(multiplier/1000).toFixed(0)}k` : 
-             multiplier >= 100 ? multiplier.toFixed(0) : 
-             multiplier.toFixed(1)}x
-          </div>
-        ))}
+        {multipliers.map((multiplier, index) => {
+          const isDead = deadZones?.includes(index);
+          
+          return (
+            <div
+              key={index}
+              className={`py-2 px-1 text-center text-xs font-bold rounded transition-all ${
+                isDead 
+                  ? 'bg-gradient-to-t from-red-900 to-red-700 text-white border-2 border-red-500' 
+                  : getSlotColor(multiplier)
+              } ${
+                result && result.finalSlot === index ? 'ring-2 ring-white animate-pulse' : ''
+              }`}
+            >
+              {isDead ? '💀' : (
+                multiplier >= 1000 ? `${(multiplier/1000).toFixed(0)}k` : 
+                multiplier >= 100 ? multiplier.toFixed(0) : 
+                multiplier.toFixed(1)
+              )}x
+            </div>
+          );
+        })}
       </div>
 
       {/* Result Display */}

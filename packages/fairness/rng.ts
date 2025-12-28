@@ -101,7 +101,7 @@ export function generateFloat(seedData: SeedData): number {
 }
 
 /**
- * Fisher-Yates shuffle using provably fair RNG
+ * Fisher-Yates shuffle using provably fair RNG (Stake-compatible)
  * Used for card games, mines, keno, etc.
  */
 export function shuffle<T>(array: T[], seedData: SeedData): T[] {
@@ -109,7 +109,7 @@ export function shuffle<T>(array: T[], seedData: SeedData): T[] {
   const floats = generateFloats(seedData, result.length);
 
   for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(floats[result.length - 1 - i] * (i + 1));
+    const j = Math.floor(floats[i] * (i + 1));
     [result[i], result[j]] = [result[j], result[i]];
   }
 
@@ -171,17 +171,36 @@ export function getGameCursorCount(gameType: string): number {
     PRIMEDICE: 0,
     PACKS: 0,
     TAROT: 0,
+    COINFLIP: 0,
+    CRASH: 0,
+    TRENBALL: 0,
+    BALLOON: 0,
+    FASTPARITY: 0,
+    RUSH: 0,
+    SOLOCRASH: 0,
     
     // Multiple cursors - multiple floats
     KENO: 2,        // 10 outcomes
     MINES: 3,       // 24 bomb locations
     PLINKO: 2,      // 16 decisions
+    TOWER: 3,       // Similar to Mines
+    STAIRS: 3,      // Similar to Mines
     HILO: 13,       // Unlimited cards
     BLACKJACK: 13,  // Unlimited cards
     VIDEO_POKER: 7, // 52 cards
   };
   
   return cursorMap[gameType] || 0;
+}
+
+/**
+ * Create seed data with proper cursor for game type
+ */
+export function createGameSeedData(seedData: SeedData, gameType: string): SeedData {
+  return {
+    ...seedData,
+    cursor: getGameCursorCount(gameType)
+  };
 }
 
 /**

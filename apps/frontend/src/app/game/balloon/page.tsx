@@ -17,7 +17,7 @@ type BetMode = 'manual' | 'auto' | 'strategy';
 export default function BalloonPage() {
   const [betMode, setBetMode] = useState<BetMode>('manual');
   const [amount, setAmount] = useState(10);
-  const [gameParams, setGameParams] = useState<BalloonGameParams>({ difficulty: 'medium', pumpMode: 'custom', targetPumps: 5 });
+  const [gameParams, setGameParams] = useState<BalloonGameParams>({ difficulty: 'medium', pumpMode: 'custom', targetMultiplier: 1.5, targetPumps: 5 });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [balance, setBalance] = useState(0);
@@ -142,7 +142,15 @@ export default function BalloonPage() {
             <div className="card">
               <BetModeSelector mode={betMode} onChange={setBetMode} showStrategy={true} />
               {betMode === 'manual' && (
-                <ManualBetControls amount={amount} balance={balance} onAmountChange={setAmount} onBet={placeBet} disabled={autoBetActive} loading={loading} multiplier={gameParams.pumpMode === 'custom' ? 1 + (gameParams.targetPumps * 0.1) : 2.0} />
+                <ManualBetControls 
+                  amount={amount} 
+                  balance={balance} 
+                  onAmountChange={setAmount} 
+                  onBet={placeBet} 
+                  disabled={autoBetActive} 
+                  loading={loading} 
+                  multiplier={gameParams.pumpMode === 'custom' ? gameParams.targetMultiplier : gameParams.pumpMode === 'specific' ? 1 + (gameParams.targetPumps * 0.05) : 2.0} 
+                />
               )}
               {betMode === 'auto' && (
                 <AutoBetControls amount={amount} balance={balance} onAmountChange={setAmount} onStart={handleStartAutoBet} onStop={handleStopAutoBet} isActive={autoBetActive} disabled={loading || amount <= 0 || amount > balance} />

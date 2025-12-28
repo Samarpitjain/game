@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-export type PlinkoRisk = 'low' | 'medium' | 'high';
+export type PlinkoRisk = 'low' | 'medium' | 'high' | 'lightning-low' | 'lightning-medium' | 'lightning-high';
 
 export interface PlinkoGameParams {
   risk: PlinkoRisk;
@@ -25,6 +25,7 @@ export default function PlinkoGameControls({ onChange, disabled = false }: Plink
   const [risk, setRisk] = useState<PlinkoRisk>('medium');
   const [rows, setRows] = useState<8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16>(12);
   const [superMode, setSuperMode] = useState(false);
+  const [isLightningMode, setIsLightningMode] = useState(false);
   const [jackpotMode, setJackpotMode] = useState(false);
   const [jackpotCondition, setJackpotCondition] = useState({
     type: 'same_trajectory' as const,
@@ -33,15 +34,21 @@ export default function PlinkoGameControls({ onChange, disabled = false }: Plink
   });
 
   useEffect(() => {
-    onChange({ risk, rows, superMode, jackpotMode, jackpotCondition: jackpotMode ? jackpotCondition : undefined });
-  }, [risk, rows, superMode, jackpotMode, jackpotCondition, onChange]);
+    // Determine actual risk value
+    let actualRisk: PlinkoRisk = risk;
+    if (isLightningMode) {
+      actualRisk = `lightning-${risk}` as PlinkoRisk;
+    }
+    
+    onChange({ risk: actualRisk, rows, superMode: isLightningMode || superMode, jackpotMode, jackpotCondition: jackpotMode ? jackpotCondition : undefined });
+  }, [risk, rows, superMode, isLightningMode, jackpotMode, jackpotCondition, onChange]);
 
   return (
     <div className="space-y-6">
       <div>
         <label className="block text-sm text-gray-400 mb-3">Risk Level</label>
         <div className="grid grid-cols-3 gap-2">
-          {(['low', 'medium', 'high'] as PlinkoRisk[]).map(r => {
+          {(['low', 'medium', 'high'] as Array<'low' | 'medium' | 'high'>).map(r => {
             const riskColors = {
               low: risk === r ? 'bg-green-600 text-white' : 'bg-gray-800 hover:bg-green-700',
               medium: risk === r ? 'bg-yellow-600 text-white' : 'bg-gray-800 hover:bg-yellow-700', 
@@ -59,6 +66,30 @@ export default function PlinkoGameControls({ onChange, disabled = false }: Plink
             );
           })}
         </div>
+      </div>
+
+      <div className={`flex items-center justify-between rounded-lg p-4 transition-all ${
+        isLightningMode ? 'bg-yellow-900/20 border border-yellow-500' : 'bg-gray-800'
+      }`}>
+        <div>
+          <div className={`font-bold ${isLightningMode ? 'text-yellow-500' : ''}`}>
+            ⚡ Lightning Mode {isLightningMode ? '(ACTIVE)' : ''}
+          </div>
+          <div className="text-xs text-gray-400">Golden pegs & dead zones</div>
+        </div>
+        <button
+          onClick={() => setIsLightningMode(!isLightningMode)}
+          disabled={disabled}
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+            isLightningMode ? 'bg-yellow-500' : 'bg-gray-700'
+          } disabled:opacity-50`}
+        >
+          <span
+            className={`inline-block h-4 w-4 transform rounded-full transition-transform ${
+              isLightningMode ? 'translate-x-6 bg-white' : 'translate-x-1 bg-gray-300'
+            }`}
+          />
+        </button>
       </div>
 
       <div>
@@ -79,19 +110,19 @@ export default function PlinkoGameControls({ onChange, disabled = false }: Plink
       </div>
 
       <div className={`flex items-center justify-between rounded-lg p-4 transition-all ${
-        superMode ? 'bg-special/20 border border-special/50' : 'bg-gray-800'
+        superMode ? 'bg-purple-900/20 border border-purple-500' : 'bg-gray-800'
       }`}>
         <div>
-          <div className={`font-bold ${superMode ? 'text-special' : ''}`}>
-            ✨ Super Mode {superMode ? '(ACTIVE)' : ''}
+          <div className={`font-bold ${superMode ? 'text-purple-500' : ''}`}>
+            🎲 Super Mode {superMode ? '(ACTIVE)' : ''}
           </div>
-          <div className="text-xs text-gray-400">1.5x multiplier boost + special ball</div>
+          <div className="text-xs text-gray-400">Shuffled multipliers (non-lightning)</div>
         </div>
         <button
           onClick={() => setSuperMode(!superMode)}
-          disabled={disabled}
+          disabled={disabled || isLightningMode}
           className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-            superMode ? 'bg-special' : 'bg-gray-700'
+            superMode ? 'bg-purple-500' : 'bg-gray-700'
           } disabled:opacity-50`}
         >
           <span

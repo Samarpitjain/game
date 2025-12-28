@@ -8,6 +8,7 @@ export type BalloonPumpMode = 'random' | 'specific' | 'custom';
 export interface BalloonGameParams {
   difficulty: BalloonDifficulty;
   pumpMode: BalloonPumpMode;
+  targetMultiplier: number;
   targetPumps: number;
 }
 
@@ -19,7 +20,16 @@ interface BalloonGameControlsProps {
 export default function BalloonGameControls({ onChange, disabled = false }: BalloonGameControlsProps) {
   const [difficulty, setDifficulty] = useState<BalloonDifficulty>('medium');
   const [pumpMode, setPumpMode] = useState<BalloonPumpMode>('custom');
+  const [targetMultiplier, setTargetMultiplier] = useState(1.5);
   const [targetPumps, setTargetPumps] = useState(5);
+
+  const maxMultipliers = {
+    simple: 2.0,
+    easy: 2.6,
+    medium: 3.5,
+    hard: 4.0,
+    expert: 5.0,
+  };
 
   const maxPumps = {
     simple: 10,
@@ -30,8 +40,8 @@ export default function BalloonGameControls({ onChange, disabled = false }: Ball
   };
 
   useEffect(() => {
-    onChange({ difficulty, pumpMode, targetPumps });
-  }, [difficulty, pumpMode, targetPumps, onChange]);
+    onChange({ difficulty, pumpMode, targetMultiplier, targetPumps });
+  }, [difficulty, pumpMode, targetMultiplier, targetPumps, onChange]);
 
   return (
     <div className="space-y-6">
@@ -71,7 +81,26 @@ export default function BalloonGameControls({ onChange, disabled = false }: Ball
         </div>
       </div>
 
-      {(pumpMode === 'custom' || pumpMode === 'specific') && (
+      {pumpMode === 'custom' && (
+        <div>
+          <label className="block text-sm text-gray-400 mb-2">Target Multiplier</label>
+          <input
+            type="number"
+            value={targetMultiplier}
+            onChange={(e) => setTargetMultiplier(Math.max(1, Math.min(maxMultipliers[difficulty], Number(e.target.value))))}
+            className="input w-full"
+            min="1"
+            max={maxMultipliers[difficulty]}
+            step="0.1"
+            disabled={disabled}
+          />
+          <div className="text-xs text-gray-500 mt-1">
+            Max: {maxMultipliers[difficulty]}x
+          </div>
+        </div>
+      )}
+
+      {pumpMode === 'specific' && (
         <div>
           <label className="block text-sm text-gray-400 mb-2">Target Pumps</label>
           <input
@@ -93,7 +122,7 @@ export default function BalloonGameControls({ onChange, disabled = false }: Ball
         <div className="text-center">
           <div className="text-sm text-gray-400">Max Multiplier</div>
           <div className="text-2xl font-bold text-primary">
-            {maxPumps[difficulty]}x
+            {maxMultipliers[difficulty]}x
           </div>
         </div>
       </div>

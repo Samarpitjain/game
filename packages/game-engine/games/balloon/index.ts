@@ -7,6 +7,7 @@ export type BalloonPumpMode = 'random' | 'specific' | 'custom';
 export interface BalloonParams {
   difficulty: BalloonDifficulty;
   pumpMode: BalloonPumpMode;
+  targetMultiplier?: number;
   targetPumps?: number;
 }
 
@@ -30,7 +31,7 @@ export class BalloonGame extends BaseGame {
     this.validateBet(input.amount, input.currency);
     
     const params = input.gameParams as BalloonParams;
-    const { difficulty, pumpMode, targetPumps = 1 } = params;
+    const { difficulty, pumpMode, targetMultiplier = 1.5, targetPumps = 1 } = params;
 
     const settings = this.difficultySettings[difficulty];
     const float = generateFloat(input.seedData);
@@ -42,9 +43,13 @@ export class BalloonGame extends BaseGame {
       const pumpFloat = generateFloat({ ...input.seedData, nonce: input.seedData.nonce + 1 });
       pumps = Math.floor(pumpFloat * burstAt);
     } else if (pumpMode === 'custom') {
-      pumps = Math.min(targetPumps, settings.maxPumps);
+      // Convert multiplier to pumps
+      const maxMultiplier = 1 + (settings.maxPumps * settings.baseMultiplier);
+      const clampedMultiplier = Math.max(1, Math.min(targetMultiplier, maxMultiplier));
+      pumps = Math.floor((clampedMultiplier - 1) / settings.baseMultiplier);
     } else {
-      pumps = targetPumps;
+      // Specific mode - uses pumps directly
+      pumps = Math.min(targetPumps, settings.maxPumps);
     }
 
     const won = pumps < burstAt;

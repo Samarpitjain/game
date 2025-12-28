@@ -93,6 +93,9 @@ router.post('/start', authenticate, async (req: AuthRequest, res) => {
       nonce: seedData.nonce,
     });
 
+    // Lock seed for this game session
+    await SeedManager.lockSeedForGame(req.userId!, session._id.toString());
+
     const playerTotal = calculateTotal(playerHand);
     const dealerTotal = calculateTotal(dealerHand);
 
@@ -209,6 +212,9 @@ router.post('/stand', authenticate, async (req: AuthRequest, res) => {
     session.betId = bet._id;
     await session.save();
 
+    // Unlock seed when game ends
+    await SeedManager.unlockSeedAfterGame(session._id.toString());
+
     res.json({
       bet,
       payout,
@@ -300,6 +306,9 @@ router.post('/double', authenticate, async (req: AuthRequest, res) => {
     session.active = false;
     session.betId = bet._id;
     await session.save();
+
+    // Unlock seed when game ends
+    await SeedManager.unlockSeedAfterGame(session._id.toString());
 
     res.json({
       bet,

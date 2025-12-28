@@ -24,28 +24,35 @@ export class MinesGame extends BaseGame {
     this.validateBet(input.amount, input.currency);
     
     const params = input.gameParams as MinesParams;
-    const { gridSize, minesCount, revealedTiles = [], selectedTiles = [] } = params;
+    const { gridSize = 25, minesCount, revealedTiles = [], selectedTiles = [] } = params;
     
-    // For auto-bet, use selectedTiles as revealedTiles
-    const tilesToReveal = selectedTiles.length > 0 ? selectedTiles : revealedTiles;
+    // Determine mode: autobet uses selectedTiles, manual uses revealedTiles
+    const isAutoBet = selectedTiles.length > 0;
+    const tilesToReveal = isAutoBet ? selectedTiles : revealedTiles;
 
-    // Validate mines count
     if (minesCount >= gridSize || minesCount < 1) {
       throw new Error('Invalid mines count');
     }
 
-    // Generate grid using Fisher-Yates shuffle
+    if (tilesToReveal.length === 0) {
+      throw new Error('No tiles to reveal');
+    }
+
+    // Generate provably fair grid
     const grid = this.generateGrid(gridSize, minesCount, input.seedData);
 
-    // Check if any revealed tile is a mine
+    // Check results
     const hitMine = tilesToReveal.some(tile => grid[tile]);
-
-    // Calculate multiplier based on revealed safe tiles
     const safeTilesRevealed = tilesToReveal.filter(tile => !grid[tile]).length;
-    const multiplier = this.calculateMultiplier(gridSize, minesCount, safeTilesRevealed);
-
-    const won = !hitMine && safeTilesRevealed > 0;
-    const finalMultiplier = won ? multiplier : 0;
+    
+    // AutoBet: win only if ALL selected tiles are safe
+    // Manual: win if any safe tiles revealed
+    const won = isAutoBet 
+      ? !hitMine && safeTilesRevealed === tilesToReveal.length
+      : !hitMine && safeTilesRevealed > 0;
+    
+    const multiplier = won ? this.calculateMultiplier(gridSize, minesCount, safeTilesRevealed) : 0;
+    const finalMultiplier = won ? multiplier * (1 - this.config.houseEdge / 100) : 0;
 
     const payout = this.calculatePayout(input.amount, finalMultiplier);
     const profit = this.calculateProfit(input.amount, payout);
@@ -68,14 +75,17 @@ export class MinesGame extends BaseGame {
   }
 
   private generateGrid(gridSize: number, minesCount: number, seedData: any): boolean[] {
+    // Use proper cursor for Mines (3 increments as per Stake)
+    const minesSeedData = { ...seedData, cursor: 3 };
+    
     // Create array with mines (true) and safe tiles (false)
     const tiles = Array(gridSize).fill(false);
     for (let i = 0; i < minesCount; i++) {
       tiles[i] = true;
     }
 
-    // Shuffle using provably fair RNG
-    return shuffle(tiles, seedData);
+    // Shuffle using provably fair RNG with proper cursor
+    return shuffle(tiles, minesSeedData);
   }
 
   private calculateMultiplier(gridSize: number, minesCount: number, safeTilesRevealed: number): number {

@@ -42,9 +42,29 @@ export default function MinesPage() {
       const payload = JSON.parse(atob(token.split('.')[1]));
       setUserId(payload.id);
     }
+    
+    // Clean up any active session on page load
+    return () => {
+      if (sessionId && gameActive) {
+        // Attempt to clean up session on unmount
+        minesAPI.cashout({ sessionId }).catch(() => {});
+      }
+    };
   }, []);
 
   useAutoBetSocket(userId, (data) => {
+    // Enhanced feedback for Mines autobet
+    if (data.bet.gameType === 'MINES') {
+      const result = data.bet.result;
+      const roundNum = data.stats?.currentBet || 'Unknown';
+      
+      if (result.hitMine) {
+        toast.error(`Round ${roundNum}: Mine hit! -$${data.bet.amount}`);
+      } else {
+        toast.success(`Round ${roundNum}: All safe! +$${data.bet.profit.toFixed(2)}`);
+      }
+    }
+    
     if (data.wallet) setBalance(data.wallet.balance);
     
     if (data.bet.won) {
@@ -98,7 +118,33 @@ export default function MinesPage() {
       toast.success('Game started!');
       await loadBalance();
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to start game');
+      if (error.response?.data?.error === 'Active game exists. Cash out first.') {
+        // Try to cleanup and restart
+        try {
+          await minesAPI.cleanup();
+          toast.info('Cleaned up previous session, starting new game...');
+          // Retry starting the game
+          const response = await minesAPI.start({
+            minesCount: gameParams.minesCount,
+            betAmount: amount,
+            currency: 'USD',
+            gridSize: 25,
+          });
+          
+          setSessionId(response.data.sessionId);
+          setCurrentMultiplier(response.data.currentMultiplier);
+          setGameActive(true);
+          setRevealedTiles([]);
+          setMineTiles([]);
+          setGameOver(false);
+          toast.success('Game started!');
+          await loadBalance();
+        } catch (retryError: any) {
+          toast.error(retryError.response?.data?.error || 'Failed to start game after cleanup');
+        }
+      } else {
+        toast.error(error.response?.data?.error || 'Failed to start game');
+      }
     } finally {
       setLoading(false);
     }
@@ -133,6 +179,32 @@ export default function MinesPage() {
     }
   };
 
+  const randomReveal = async () => {
+    if (!sessionId || gameOver) return;
+
+    setLoading(true);
+    try {
+      const response = await minesAPI.randomReveal({ sessionId });
+
+      if (response.data.safe) {
+        setRevealedTiles(response.data.revealedTiles);
+        setCurrentMultiplier(response.data.currentMultiplier);
+        toast.success(`Random pick safe! ${response.data.currentMultiplier.toFixed(2)}x`);
+      } else {
+        setGameOver(true);
+        setGameActive(false);
+        setMineTiles([response.data.tileIndex]);
+        toast.error('Random pick hit a mine! Game over');
+        setStats(s => ({ ...s, losses: s.losses + 1, profit: s.profit - amount, wagered: s.wagered + amount }));
+        await loadBalance();
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.error || 'Failed to reveal random tile');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const cashOut = async () => {
     if (!sessionId) return;
 
@@ -159,7 +231,18 @@ export default function MinesPage() {
 
   const handleStartAutoBet = async (config: AutoBetConfig) => {
     if (gameParams.selectedTiles.length === 0) {
-      toast.error('Select tiles for auto-bet');
+      toast.error('Select tiles for autobet by clicking on the grid in Auto mode');
+      return;
+    }
+
+    if (gameParams.selectedTiles.length > 20) {
+      toast.error('Maximum 20 tiles allowed for autobet');
+      return;
+    }
+
+    const safeTiles = 25 - gameParams.minesCount;
+    if (gameParams.selectedTiles.length > safeTiles) {
+      toast.error(`Cannot select more tiles than safe tiles available (${safeTiles})`);
       return;
     }
 
@@ -168,13 +251,17 @@ export default function MinesPage() {
         gameType: 'MINES',
         currency: 'USD',
         amount,
-        gameParams: { minesCount: gameParams.minesCount, selectedTiles: gameParams.selectedTiles },
+        gameParams: { 
+          minesCount: gameParams.minesCount, 
+          selectedTiles: gameParams.selectedTiles,
+          gridSize: 25
+        },
         config,
       });
       setAutoBetActive(true);
-      toast.success('Auto-bet started');
+      toast.success(`AutoBet started: ${gameParams.selectedTiles.length} tiles, ${config.numberOfBets || '∞'} rounds`);
     } catch (error: any) {
-      toast.error(error.response?.data?.error || 'Failed to start auto-bet');
+      toast.error(error.response?.data?.error || 'Failed to start autobet');
     }
   };
 
@@ -225,30 +312,47 @@ export default function MinesPage() {
               <h2 className="text-2xl font-bold mb-6">Mines</h2>
 
               {gameActive && betMode === 'manual' && (
-                <div className="mb-4 p-4 bg-blue-900/20 border border-blue-500 rounded-lg text-center">
-                  <div className="text-sm text-gray-400">Current Multiplier</div>
-                  <div className="text-3xl font-bold text-primary">{currentMultiplier.toFixed(2)}x</div>
-                  <div className="text-sm text-gray-400 mt-1">Potential Win: ${(amount * currentMultiplier).toFixed(2)}</div>
+                <div className="mb-4 p-4 bg-blue-900/20 border border-blue-500 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="text-sm text-gray-400">Current Multiplier</div>
+                    <div className="text-2xl font-bold text-primary">{currentMultiplier.toFixed(2)}x</div>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="text-sm text-gray-400">Total Profit ({currentMultiplier.toFixed(2)}x)</div>
+                    <div className="text-xl font-bold text-green-500">${(amount * currentMultiplier).toFixed(2)}</div>
+                  </div>
                 </div>
               )}
 
               <MinesGameControls
                 onChange={setGameParams}
-                disabled={loading || autoBetActive || (betMode === 'manual' && gameActive)}
+                disabled={loading}
                 isAutoMode={betMode === 'auto'}
                 revealedTiles={revealedTiles}
                 mineTiles={mineTiles}
                 onTileClick={betMode === 'manual' ? revealTile : undefined}
+                gameActive={gameActive}
+                gemsFound={revealedTiles.filter(t => !mineTiles.includes(t)).length}
+                autoBetActive={autoBetActive}
               />
 
-              {gameActive && betMode === 'manual' && !gameOver && revealedTiles.length > 0 && (
-                <button
-                  onClick={cashOut}
-                  disabled={loading}
-                  className="btn-primary w-full py-3 mt-4"
-                >
-                  Cash Out ${(amount * currentMultiplier).toFixed(2)}
-                </button>
+              {gameActive && betMode === 'manual' && !gameOver && (
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={cashOut}
+                    disabled={loading || revealedTiles.length === 0}
+                    className="btn-primary flex-1 py-3"
+                  >
+                    Cashout ${(amount * currentMultiplier).toFixed(2)}
+                  </button>
+                  <button
+                    onClick={randomReveal}
+                    disabled={loading}
+                    className="btn-secondary px-6 py-3"
+                  >
+                    Random Pick
+                  </button>
+                </div>
               )}
 
               {gameOver && betMode === 'manual' && (
@@ -281,6 +385,7 @@ export default function MinesPage() {
                   onBet={startManualGame}
                   disabled={autoBetActive}
                   loading={loading}
+                  buttonText="Bet"
                 />
               )}
 

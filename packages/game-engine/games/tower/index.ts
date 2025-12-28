@@ -49,11 +49,13 @@ export class TowerGame extends BaseGame {
   }
 
   private generateGrid(floors: number, seedData: any): boolean[] {
+    // Use proper cursor for Tower (similar to Mines)
+    const towerSeedData = { ...seedData, cursor: 3 };
     const totalTiles = floors * 3;
     const tiles = Array(totalTiles).fill(false);
     
     for (let floor = 0; floor < floors; floor++) {
-      const dangerPositions = shuffle([0, 1, 2], { ...seedData, nonce: seedData.nonce + floor });
+      const dangerPositions = shuffle([0, 1, 2], { ...towerSeedData, nonce: towerSeedData.nonce + floor });
       tiles[floor * 3 + dangerPositions[0]] = true;
       tiles[floor * 3 + dangerPositions[1]] = true;
     }

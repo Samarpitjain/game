@@ -49,11 +49,13 @@ export class StairsGame extends BaseGame {
   }
 
   private generateGrid(steps: number, seedData: any): boolean[] {
+    // Use proper cursor for Stairs (similar to Mines)
+    const stairsSeedData = { ...seedData, cursor: 3 };
     const totalTiles = steps * 2;
     const tiles = Array(totalTiles).fill(false);
     
     for (let step = 0; step < steps; step++) {
-      const dangerPosition = shuffle([0, 1], { ...seedData, nonce: seedData.nonce + step })[0];
+      const dangerPosition = shuffle([0, 1], { ...stairsSeedData, nonce: stairsSeedData.nonce + step })[0];
       tiles[step * 2 + dangerPosition] = true;
     }
     

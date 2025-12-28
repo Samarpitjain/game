@@ -13,6 +13,7 @@ export default function FairnessModal({ isOpen, onClose }: FairnessModalProps) {
   const [seedData, setSeedData] = useState<any>(null);
   const [newClientSeed, setNewClientSeed] = useState('');
   const [loading, setLoading] = useState(false);
+  const [hasActiveGame, setHasActiveGame] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -25,12 +26,17 @@ export default function FairnessModal({ isOpen, onClose }: FairnessModalProps) {
       const response = await seedAPI.getActive();
       setSeedData(response.data);
       setNewClientSeed(response.data.clientSeed);
+      setHasActiveGame(!!response.data.activeGameSession);
     } catch (error) {
       toast.error('Failed to load seed data');
     }
   };
 
   const handleRotateSeed = async () => {
+    if (hasActiveGame) {
+      toast.error('Cannot rotate seed during active game session');
+      return;
+    }
     setLoading(true);
     try {
       const response = await seedAPI.rotate();
@@ -85,13 +91,30 @@ export default function FairnessModal({ isOpen, onClose }: FairnessModalProps) {
           {seedData && (
             <div className="space-y-6">
               {/* Status Badge */}
-              <div className="bg-green-900/20 border border-green-500 rounded-lg p-3 flex items-center justify-between">
+              <div className={`border rounded-lg p-3 flex items-center justify-between ${
+                hasActiveGame 
+                  ? 'bg-yellow-900/20 border-yellow-500' 
+                  : 'bg-green-900/20 border-green-500'
+              }`}>
                 <div>
-                  <div className="font-bold text-green-500">Active Seed Pair</div>
-                  <div className="text-sm text-gray-400">{seedData.betCount || 0} bets placed</div>
+                  <div className={`font-bold ${
+                    hasActiveGame ? 'text-yellow-500' : 'text-green-500'
+                  }`}>
+                    {hasActiveGame ? '🔒 Seed Locked' : 'Active Seed Pair'}
+                  </div>
+                  <div className="text-sm text-gray-400">
+                    {hasActiveGame 
+                      ? 'Complete your game to unlock' 
+                      : `${seedData.betCount || 0} bets placed`
+                    }
+                  </div>
                 </div>
-                <div className="bg-green-500 text-white px-3 py-1 rounded-full text-sm font-bold">
-                  ACTIVE
+                <div className={`px-3 py-1 rounded-full text-sm font-bold ${
+                  hasActiveGame 
+                    ? 'bg-yellow-500 text-black' 
+                    : 'bg-green-500 text-white'
+                }`}>
+                  {hasActiveGame ? 'LOCKED' : 'ACTIVE'}
                 </div>
               </div>
 
@@ -150,16 +173,24 @@ export default function FairnessModal({ isOpen, onClose }: FairnessModalProps) {
               {/* Rotate Seed */}
               <div className="bg-yellow-900/20 border border-yellow-500/50 rounded-lg p-4">
                 <h3 className="font-bold mb-2">Rotate Seed Pair</h3>
+                {hasActiveGame && (
+                  <div className="bg-red-900/20 border border-red-500 p-3 rounded mb-3">
+                    <div className="text-red-500 font-bold mb-1">⚠️ Cannot Rotate</div>
+                    <div className="text-sm text-gray-400">
+                      You have an active game session. Complete or cashout your current game before rotating seeds.
+                    </div>
+                  </div>
+                )}
                 <p className="text-sm text-gray-400 mb-3">
                   Rotating will reveal your current server seed and generate a new seed pair.
                   This allows you to verify all previous bets.
                 </p>
                 <button
                   onClick={handleRotateSeed}
-                  disabled={loading}
-                  className="btn-secondary w-full disabled:opacity-50"
+                  disabled={loading || hasActiveGame}
+                  className="btn-secondary w-full disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Rotating...' : 'Rotate Seed Pair'}
+                  {loading ? 'Rotating...' : hasActiveGame ? 'Locked During Game' : 'Rotate Seed Pair'}
                 </button>
               </div>
 

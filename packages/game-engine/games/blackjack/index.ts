@@ -35,7 +35,9 @@ export class BlackjackGame extends BaseGame {
       }
     }
 
-    return shuffle(deck, seedData);
+    // Use proper cursor for Blackjack (13 increments as per Stake)
+    const blackjackSeedData = { ...seedData, cursor: 13 };
+    return shuffle(deck, blackjackSeedData);
   }
 
   private calculateTotal(hand: Card[]): number {

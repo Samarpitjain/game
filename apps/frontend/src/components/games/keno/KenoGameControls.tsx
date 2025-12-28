@@ -14,6 +14,16 @@ interface KenoGameControlsProps {
   disabled?: boolean;
 }
 
+// Simple client-side shuffle for UI (not for actual game logic)
+function shuffleArray<T>(array: T[]): T[] {
+  const result = [...array];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 export default function KenoGameControls({ onChange, disabled = false }: KenoGameControlsProps) {
   const [selectedNumbers, setSelectedNumbers] = useState<number[]>([]);
   const [risk, setRisk] = useState<KenoRisk>('medium');
@@ -31,20 +41,39 @@ export default function KenoGameControls({ onChange, disabled = false }: KenoGam
     }
   };
 
-  const autoPick = () => {
+  const randomPick = () => {
     if (disabled) return;
-    const count = Math.floor(Math.random() * 10) + 1;
-    const numbers: number[] = [];
-    while (numbers.length < count) {
-      const num = Math.floor(Math.random() * 40) + 1;
-      if (!numbers.includes(num)) numbers.push(num);
+    
+    const maxNumbers = 10;
+    const needed = maxNumbers - selectedNumbers.length;
+    
+    if (needed <= 0) {
+      // Replace all with new random selection
+      const allNumbers = Array.from({ length: 40 }, (_, i) => i + 1);
+      const shuffled = shuffleArray(allNumbers);
+      setSelectedNumbers(shuffled.slice(0, maxNumbers).sort((a, b) => a - b));
+    } else {
+      // Add random numbers to fill up to 10
+      const available = Array.from({ length: 40 }, (_, i) => i + 1)
+        .filter(n => !selectedNumbers.includes(n));
+      
+      const shuffled = shuffleArray(available);
+      const newPicks = shuffled.slice(0, needed);
+      
+      setSelectedNumbers([...selectedNumbers, ...newPicks].sort((a, b) => a - b));
     }
-    setSelectedNumbers(numbers.sort((a, b) => a - b));
   };
 
-  const clear = () => {
+  const clearTable = () => {
     if (disabled) return;
     setSelectedNumbers([]);
+  };
+
+  const getSelectionText = () => {
+    if (selectedNumbers.length === 0) {
+      return 'Select 1 - 10 numbers to play';
+    }
+    return `${selectedNumbers.length}/10 numbers selected`;
   };
 
   return (
@@ -59,7 +88,7 @@ export default function KenoGameControls({ onChange, disabled = false }: KenoGam
           <button
             key={num}
             onClick={() => toggleNumber(num)}
-            disabled={disabled}
+            disabled={disabled || (selectedNumbers.length >= 10 && !selectedNumbers.includes(num))}
             className={`aspect-square rounded-lg font-bold transition-all ${
               selectedNumbers.includes(num)
                 ? 'bg-primary text-white scale-110 shadow-lg'
@@ -72,11 +101,11 @@ export default function KenoGameControls({ onChange, disabled = false }: KenoGam
       </div>
 
       <div className="flex gap-2">
-        <button onClick={autoPick} disabled={disabled} className="btn-secondary flex-1">
-          Auto Pick
+        <button onClick={randomPick} disabled={disabled} className="btn-secondary flex-1">
+          Random Pick
         </button>
-        <button onClick={clear} disabled={disabled} className="btn-secondary flex-1">
-          Clear
+        <button onClick={clearTable} disabled={disabled} className="btn-secondary flex-1">
+          Clear Table
         </button>
       </div>
 
@@ -96,6 +125,10 @@ export default function KenoGameControls({ onChange, disabled = false }: KenoGam
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="text-center text-sm text-gray-400 py-2">
+        {getSelectionText()}
       </div>
     </div>
   );

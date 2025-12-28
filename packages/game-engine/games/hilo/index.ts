@@ -15,7 +15,10 @@ export interface HiLoResult {
   won: boolean;
   cardHistory: number[];
   currentMultiplier: number;
+  suit?: string;
 }
+
+const suits = ['hearts', 'diamonds', 'clubs', 'spades'];
 
 export class HiLoGame extends BaseGame {
   play(input: BetInput): BetResult {
@@ -24,14 +27,21 @@ export class HiLoGame extends BaseGame {
     const params = input.gameParams as HiLoParams;
     const { choice, currentCard, cardHistory = [] } = params;
 
-    const nextCard = generateInt(input.seedData, 1, 13);
-    const current = currentCard || generateInt({ ...input.seedData, nonce: input.seedData.nonce + 1 }, 1, 13);
+    // Use proper cursor for HiLo (13 increments as per Stake)
+    const hiloSeedData = { ...input.seedData, cursor: 13 };
+    
+    const nextCard = generateInt(hiloSeedData, 1, 13);
+    const current = currentCard || generateInt({ ...hiloSeedData, nonce: hiloSeedData.nonce + 1 }, 1, 13);
+    
+    // Generate suit for visual purposes
+    const suitIndex = generateInt({ ...hiloSeedData, nonce: hiloSeedData.nonce + 2 }, 0, 3);
+    const suit = suits[suitIndex];
 
     let won = false;
     if (choice === 'higher') {
-      won = nextCard > current;
+      won = nextCard >= current; // Include same as win for "Higher or Same"
     } else if (choice === 'lower') {
-      won = nextCard < current;
+      won = nextCard <= current; // Include same as win for "Lower or Same"
     } else if (choice === 'skip') {
       won = true;
     }
@@ -49,6 +59,7 @@ export class HiLoGame extends BaseGame {
       won,
       cardHistory: newHistory,
       currentMultiplier: multiplier,
+      suit,
     };
 
     return {

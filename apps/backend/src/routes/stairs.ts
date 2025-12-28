@@ -51,6 +51,9 @@ router.post('/start', authenticate, async (req: AuthRequest, res) => {
       nonce: seedData.nonce,
     });
 
+    // Lock seed for this game session
+    await SeedManager.lockSeedForGame(req.userId!, session._id.toString());
+
     res.json({
       sessionId: session._id,
       steps,
@@ -80,6 +83,9 @@ router.post('/reveal', authenticate, async (req: AuthRequest, res) => {
     if (isDanger) {
       session.active = false;
       await session.save();
+
+      // Unlock seed when game ends
+      await SeedManager.unlockSeedAfterGame(session._id.toString());
 
       const bet = await Bet.create({
         userId: req.userId,
@@ -174,6 +180,9 @@ router.post('/cashout', authenticate, async (req: AuthRequest, res) => {
     session.active = false;
     session.betId = bet._id;
     await session.save();
+
+    // Unlock seed when game ends
+    await SeedManager.unlockSeedAfterGame(session._id.toString());
 
     res.json({
       bet,

@@ -74,9 +74,10 @@ export class KenoGame extends BaseGame {
       throw new Error('Numbers must be between 1-40');
     }
 
-    // Generate 10 drawn numbers from 1-40
+    // Generate 10 drawn numbers from 1-40 using proper cursor
+    const kenoSeedData = { ...input.seedData, cursor: 2 };
     const allNumbers = Array.from({ length: 40 }, (_, i) => i + 1);
-    const shuffled = shuffle(allNumbers, input.seedData);
+    const shuffled = shuffle(allNumbers, kenoSeedData);
     const drawnNumbers = shuffled.slice(0, 10).sort((a, b) => a - b);
 
     // Find matches
@@ -110,12 +111,30 @@ export class KenoGame extends BaseGame {
   }
 
   /**
-   * Auto pick random numbers
+   * Auto pick random numbers (provably fair)
+   * Fills up to 10 total numbers, adding to existing selection
    */
-  static autoPick(count: number, seedData: any): number[] {
-    const allNumbers = Array.from({ length: 40 }, (_, i) => i + 1);
-    const shuffled = shuffle(allNumbers, seedData);
-    return shuffled.slice(0, count).sort((a, b) => a - b);
+  static autoPick(currentSelection: number[], seedData: any): number[] {
+    const maxNumbers = 10;
+    const needed = maxNumbers - currentSelection.length;
+    
+    if (needed <= 0) {
+      // If already at max, replace all with new random selection
+      const allNumbers = Array.from({ length: 40 }, (_, i) => i + 1);
+      const kenoSeedData = { ...seedData, cursor: 2 };
+      const shuffled = shuffle(allNumbers, kenoSeedData);
+      return shuffled.slice(0, maxNumbers).sort((a, b) => a - b);
+    }
+    
+    // Get available numbers (not already selected)
+    const available = Array.from({ length: 40 }, (_, i) => i + 1)
+      .filter(n => !currentSelection.includes(n));
+    
+    const kenoSeedData = { ...seedData, cursor: 2 };
+    const shuffled = shuffle(available, kenoSeedData);
+    const newPicks = shuffled.slice(0, needed);
+    
+    return [...currentSelection, ...newPicks].sort((a, b) => a - b);
   }
 
   /**

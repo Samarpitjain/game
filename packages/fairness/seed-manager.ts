@@ -74,9 +74,49 @@ export class SeedManager {
   }
 
   /**
+   * Lock seed for active game session
+   */
+  static async lockSeedForGame(userId: string, gameSessionId: string) {
+    const seedPair = await SeedPair.findOne({ userId, isActive: true });
+    if (!seedPair) throw new Error('No active seed pair found');
+    
+    seedPair.activeGameSession = gameSessionId;
+    await seedPair.save();
+    return seedPair;
+  }
+
+  /**
+   * Unlock seed after game session ends
+   */
+  static async unlockSeedAfterGame(gameSessionId: string) {
+    await SeedPair.updateOne(
+      { activeGameSession: gameSessionId },
+      { $unset: { activeGameSession: 1 } }
+    );
+  }
+
+  /**
+   * Check if user has active game session
+   */
+  static async hasActiveGameSession(userId: string): Promise<boolean> {
+    const seedPair = await SeedPair.findOne({ 
+      userId, 
+      isActive: true, 
+      activeGameSession: { $exists: true } 
+    });
+    return !!seedPair;
+  }
+
+  /**
    * Rotate to new seed pair (reveals old server seed)
    */
   static async rotateSeedPair(userId: string, newClientSeed?: string) {
+    // Check for active game session
+    const hasActiveGame = await this.hasActiveGameSession(userId);
+    if (hasActiveGame) {
+      throw new Error('Cannot rotate seed during active game session');
+    }
+
     const currentSeed = await SeedPair.findOne({ userId, isActive: true });
 
     if (currentSeed) {

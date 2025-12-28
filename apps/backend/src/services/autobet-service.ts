@@ -126,7 +126,7 @@ export class AutoBetService {
    * Check if game type is session-based
    */
   private static isSessionGame(gameType: string): boolean {
-    return ['MINES', 'TOWER', 'STAIRS', 'HILO', 'BLACKJACK'].includes(gameType);
+    return ['TOWER', 'STAIRS', 'HILO', 'BLACKJACK'].includes(gameType);
   }
 
   /**
@@ -145,6 +145,15 @@ export class AutoBetService {
     if (this.isSessionGame(betInput.gameType)) {
       console.log(`[AutoBet] Session game ${betInput.gameType} - AutoBet not supported`);
       throw new Error(`AutoBet is not supported for ${betInput.gameType}. This game requires manual play.`);
+    }
+
+    // Special validation for MINES
+    if (betInput.gameType === 'MINES') {
+      const params = betInput.gameParams as any;
+      if (!params.selectedTiles || params.selectedTiles.length === 0) {
+        throw new Error('MINES autobet requires selected tiles. Please select tiles in Auto mode.');
+      }
+      console.log(`[AutoBet] MINES autobet with ${params.selectedTiles.length} selected tiles`);
     }
 
     // Store initial amount for reset functionality
@@ -168,7 +177,7 @@ export class AutoBetService {
       const jobs = await this.autoBetQueue.getJobs(['waiting', 'delayed']);
       console.log(`[AutoBet] Jobs in queue: ${jobs.length}`);
     } catch (error: any) {
-      console.error('[AutoBet] ❌ Failed to schedule:', error.message);
+      console.error('[AutoBet] ❌ Redis failed, using sync mode:', error.message);
       // Fallback: process immediately without queue
       this.processAutoBetSync(userId, sessionData, betInput, 1);
     }

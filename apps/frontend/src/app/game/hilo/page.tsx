@@ -32,6 +32,7 @@ export default function HiLoPage() {
 
   useEffect(() => {
     loadBalance();
+    clearActiveSessions(); // Clear any existing sessions
     const token = localStorage.getItem('token');
     if (token) {
       const payload = JSON.parse(atob(token.split('.')[1]));
@@ -47,6 +48,14 @@ export default function HiLoPage() {
       setStats(s => ({ ...s, losses: s.losses + 1, profit: s.profit + data.bet.profit, wagered: s.wagered + data.bet.amount }));
     }
   });
+
+  const clearActiveSessions = async () => {
+    try {
+      await hiloAPI.clearSession();
+    } catch (error) {
+      // Ignore errors - session might not exist
+    }
+  };
 
   const loadBalance = async () => {
     try {
@@ -66,6 +75,9 @@ export default function HiLoPage() {
 
     setLoading(true);
     try {
+      // Clear any existing sessions first
+      await clearActiveSessions();
+      
       const response = await hiloAPI.start({
         betAmount: amount,
         currency: 'USD',
@@ -80,7 +92,11 @@ export default function HiLoPage() {
       toast.success('Game started!');
       await loadBalance();
     } catch (error: any) {
+      console.error('Start game error:', error);
       toast.error(error.response?.data?.error || 'Failed to start game');
+      // Try to clear sessions and reset state on error
+      await clearActiveSessions();
+      resetGame();
     } finally {
       setLoading(false);
     }
@@ -162,7 +178,12 @@ export default function HiLoPage() {
     }
   };
 
-  const resetGame = () => {
+  const resetGame = async () => {
+    try {
+      await hiloAPI.clearSession();
+    } catch (error) {
+      // Ignore errors
+    }
     setGameActive(false);
     setGameOver(false);
     setCurrentCard(undefined);
@@ -208,17 +229,21 @@ export default function HiLoPage() {
 
               <HiLoGameControls
                 currentCard={currentCard}
+                cardHistory={cardHistory}
+                betAmount={amount}
+                currentMultiplier={currentMultiplier}
                 onChoice={makeChoice}
-                disabled={loading || !gameActive || gameOver}
+                disabled={loading || gameOver}
+                gameActive={gameActive}
               />
 
               {gameActive && !gameOver && cardHistory.length > 0 && (
                 <button
                   onClick={cashOut}
                   disabled={loading}
-                  className="btn-primary w-full py-3 mt-4"
+                  className="bg-orange-500 hover:bg-orange-400 text-white w-full py-3 mt-4 rounded-lg font-bold"
                 >
-                  Cash Out ${(amount * currentMultiplier).toFixed(2)}
+                  Cash out → ${(amount * currentMultiplier).toFixed(2)}
                 </button>
               )}
 

@@ -14,6 +14,9 @@ interface MinesGameControlsProps {
   revealedTiles?: number[];
   mineTiles?: number[];
   onTileClick?: (index: number) => void;
+  gameActive?: boolean;
+  gemsFound?: number;
+  autoBetActive?: boolean;
 }
 
 export default function MinesGameControls({ 
@@ -22,7 +25,10 @@ export default function MinesGameControls({
   isAutoMode = false,
   revealedTiles = [],
   mineTiles = [],
-  onTileClick
+  onTileClick,
+  gameActive = false,
+  gemsFound = 0,
+  autoBetActive = false
 }: MinesGameControlsProps) {
   const [minesCount, setMinesCount] = useState(3);
   const [selectedTiles, setSelectedTiles] = useState<number[]>([]);
@@ -33,20 +39,16 @@ export default function MinesGameControls({
   }, [minesCount, selectedTiles, onChange]);
 
   const handleTileClick = (index: number) => {
-    if (disabled) return;
+    if (disabled || autoBetActive) return;
 
     if (isAutoMode) {
-      // Auto mode: pre-select tiles
       if (selectedTiles.includes(index)) {
         setSelectedTiles(selectedTiles.filter(t => t !== index));
       } else {
         setSelectedTiles([...selectedTiles, index]);
       }
-    } else {
-      // Manual mode: reveal tiles during game
-      if (onTileClick) {
-        onTileClick(index);
-      }
+    } else if (gameActive && onTileClick) {
+      onTileClick(index);
     }
   };
 
@@ -54,12 +56,13 @@ export default function MinesGameControls({
     if (mineTiles.includes(index)) return 'bg-red-500 text-white';
     if (revealedTiles.includes(index)) return 'bg-green-500 text-white';
     if (isAutoMode && selectedTiles.includes(index)) return 'bg-blue-500 text-white';
+    if (gameActive && !isAutoMode) return 'bg-gray-700 hover:bg-gray-600 cursor-pointer';
     if (disabled && !isAutoMode) return 'bg-gray-800';
     return 'bg-gray-700 hover:bg-gray-600 cursor-pointer';
   };
 
   const getTileContent = (index: number) => {
-    if (mineTiles.includes(index)) return '💣';
+    if (mineTiles.includes(index)) return '💥';
     if (revealedTiles.includes(index)) return '💎';
     if (isAutoMode && selectedTiles.includes(index)) return '✓';
     return '';
@@ -67,24 +70,38 @@ export default function MinesGameControls({
 
   return (
     <div className="space-y-4">
-      <div>
-        <label className="block text-sm text-gray-400 mb-2">Mines Count</label>
-        <input
-          type="range"
-          min="1"
-          max="24"
-          value={minesCount}
-          onChange={(e) => setMinesCount(Number(e.target.value))}
-          className="w-full"
-          disabled={disabled}
-        />
-        <div className="text-center text-2xl font-bold mt-2">{minesCount}</div>
+      <div className="flex gap-4">
+        <div className="flex-1">
+          <label className="block text-sm text-gray-400 mb-2">Mines</label>
+          <select
+            value={minesCount}
+            onChange={(e) => setMinesCount(Number(e.target.value))}
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2"
+            disabled={disabled || gameActive}
+          >
+            {Array.from({ length: 24 }, (_, i) => i + 1).map(num => (
+              <option key={num} value={num}>{num}</option>
+            ))}
+          </select>
+        </div>
+        
+        {gameActive && (
+          <div className="flex-1">
+            <label className="block text-sm text-gray-400 mb-2">Gems</label>
+            <div className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-center font-bold">
+              {gemsFound}
+            </div>
+          </div>
+        )}
       </div>
 
       {isAutoMode && (
-        <div className="bg-blue-900/20 border border-blue-500 rounded-lg p-3 text-center">
-          <div className="text-sm text-gray-400">Selected Tiles for Auto-Bet</div>
-          <div className="text-xl font-bold text-blue-500">{selectedTiles.length}</div>
+        <div className="bg-blue-900/20 border border-blue-500 rounded-lg p-3 text-center mb-4">
+          <div className="text-sm text-gray-400">AutoBet Configuration</div>
+          <div className="text-xl font-bold text-blue-500">{selectedTiles.length} tiles selected</div>
+          <div className="text-xs text-gray-400 mt-1">
+            {selectedTiles.length > 0 ? `Expected multiplier: ~${(1.2 ** selectedTiles.length).toFixed(2)}x` : 'Select tiles to see multiplier'}
+          </div>
         </div>
       )}
 
@@ -93,7 +110,7 @@ export default function MinesGameControls({
           <button
             key={i}
             onClick={() => handleTileClick(i)}
-            disabled={disabled && !isAutoMode}
+            disabled={disabled || (gameActive && revealedTiles.includes(i)) || (gameActive && mineTiles.includes(i))}
             className={`aspect-square rounded-lg font-bold text-2xl transition-all ${getTileClass(i)}`}
           >
             {getTileContent(i)}

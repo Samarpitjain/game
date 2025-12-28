@@ -1,18 +1,27 @@
 import { BaseGame, BetInput, BetResult } from '../../base-game';
 import { generateFloats } from '@casino/fairness';
+import crypto from 'crypto';
 
-export type PlinkoRisk = 'low' | 'medium' | 'high';
+export type PlinkoRisk = 'low' | 'medium' | 'high' | 'lightning-low' | 'lightning-medium' | 'lightning-high';
 
 export interface PlinkoParams {
   risk: PlinkoRisk;
   rows: 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
   superMode?: boolean;
+  payoutSeed?: string;
 }
 
 export interface PlinkoResult {
-  path: number[]; // 0 = left, 1 = right
+  path: number[];
   finalSlot: number;
   multiplier: number;
+  payoutSeed?: string;
+  goldenCoins?: number[];
+  shuffledMultipliers?: number[];
+  goldenPegs?: Array<{ row: number; position: number; multiplier: number }>;
+  deadZones?: number[];
+  goldenPegHits?: Array<{ row: number; position: number; multiplier: number }>;
+  finalGoldenMultiplier?: number;
 }
 
 /**
@@ -20,6 +29,25 @@ export interface PlinkoResult {
  * Ball drops through pegs, lands in multiplier slot
  */
 export class PlinkoGame extends BaseGame {
+  // Lightning mode multiplier pools
+  private lightningMultipliers = {
+    'lightning-low': [2, 3, 4, 5, 6, 8, 10],
+    'lightning-medium': [5, 8, 10, 12, 15, 20, 25, 30],
+    'lightning-high': [10, 15, 20, 30, 40, 50, 80, 100]
+  };
+
+  // Golden peg count based on rows
+  private goldenPegCount: Record<number, number> = {
+    8: 3, 9: 3, 10: 4, 11: 4, 12: 5, 13: 5, 14: 6, 15: 7, 16: 8
+  };
+
+  // Dead zone count based on risk
+  private deadZoneCount = {
+    'lightning-low': 2,
+    'lightning-medium': 3,
+    'lightning-high': 4
+  };
+
   // Multiplier tables for each risk level and row count
   private multipliers: Record<PlinkoRisk, Record<number, number[]>> = {
     low: {
@@ -61,25 +89,58 @@ export class PlinkoGame extends BaseGame {
     this.validateBet(input.amount, input.currency);
     
     const params = input.gameParams as PlinkoParams;
-    const { risk, rows, superMode } = params;
+    const { risk, rows, superMode, payoutSeed } = params;
 
-    // Generate path using RNG
-    const floats = generateFloats(input.seedData, rows);
+    const isLightningMode = risk.startsWith('lightning-');
+
+    // Generate path using provably fair RNG
+    const plinkoSeedData = { ...input.seedData, cursor: 0 };
+    const floats = generateFloats(plinkoSeedData, rows);
     const path = floats.map(f => (f < 0.5 ? 0 : 1));
 
-    // Calculate final slot (sum of path)
+    // Calculate final slot
     const finalSlot = path.reduce((sum, dir) => sum + dir, 0);
 
-    // Get multiplier from table
-    const multiplierTable = this.multipliers[risk][rows];
-    let multiplier = multiplierTable[finalSlot];
+    // Get multipliers (shuffled if super mode)
+    let multiplierTable = this.multipliers[risk.replace('lightning-', '') as 'low' | 'medium' | 'high'][rows];
+    let goldenCoins: number[] | undefined;
+    let finalPayoutSeed: string | undefined;
+    let goldenPegs: Array<{ row: number; position: number; multiplier: number }> | undefined;
+    let deadZones: number[] | undefined;
+    let goldenPegHits: Array<{ row: number; position: number; multiplier: number }> | undefined;
+    let finalGoldenMultiplier = 1;
 
-    // Super mode increases multiplier
-    if (superMode) {
-      multiplier *= 1.5;
+    if (superMode || isLightningMode) {
+      finalPayoutSeed = payoutSeed || this.generatePayoutSeed();
+      
+      if (isLightningMode) {
+        // Generate golden pegs and dead zones for lightning mode
+        goldenPegs = this.generateGoldenPegs(risk as any, rows, finalPayoutSeed);
+        deadZones = this.generateDeadZones(risk as any, rows, finalPayoutSeed);
+        
+        // Check if ball hit any golden pegs
+        goldenPegHits = this.checkGoldenPegHits(path, goldenPegs);
+        
+        // Calculate golden multiplier
+        finalGoldenMultiplier = goldenPegHits.reduce((mult, hit) => mult * hit.multiplier, 1);
+      } else {
+        // Super mode (non-lightning) - shuffle multipliers
+        const shuffled = this.shuffleMultipliers(multiplierTable, finalPayoutSeed);
+        multiplierTable = shuffled.multipliers;
+        goldenCoins = shuffled.goldenCoins;
+      }
     }
 
-    // Apply house edge to multiplier
+    let multiplier = multiplierTable[finalSlot];
+    
+    // Check if landed in dead zone (lightning mode only)
+    if (isLightningMode && deadZones && deadZones.includes(finalSlot)) {
+      multiplier = 0; // Dead zone = instant loss
+    } else if (isLightningMode) {
+      // Apply golden peg multipliers
+      multiplier *= finalGoldenMultiplier;
+    }
+    
     const finalMultiplier = multiplier * (1 - this.config.houseEdge / 100);
     
     const won = finalMultiplier >= 1;
@@ -89,7 +150,14 @@ export class PlinkoGame extends BaseGame {
     const result: PlinkoResult = {
       path,
       finalSlot,
-      multiplier,
+      multiplier: finalMultiplier,
+      payoutSeed: finalPayoutSeed,
+      goldenCoins,
+      shuffledMultipliers: superMode && !isLightningMode ? multiplierTable : undefined,
+      goldenPegs,
+      deadZones,
+      goldenPegHits,
+      finalGoldenMultiplier: isLightningMode ? finalGoldenMultiplier : undefined,
     };
 
     return {
@@ -98,11 +166,93 @@ export class PlinkoGame extends BaseGame {
       profit,
       won,
       gameData: params,
-      result: {
-        ...result,
-        multiplier: finalMultiplier,
-      },
+      result,
     };
+  }
+
+  private generatePayoutSeed(): string {
+    return crypto.randomBytes(4).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 6);
+  }
+
+  private shuffleMultipliers(multipliers: number[], payoutSeed: string): { multipliers: number[], goldenCoins: number[] } {
+    const result = [...multipliers];
+    const goldenCoins: number[] = [];
+    
+    // Use payout seed to shuffle
+    const hash = crypto.createHash('sha256').update(payoutSeed).digest();
+    
+    // Fisher-Yates shuffle with payout seed
+    for (let i = result.length - 1; i > 0; i--) {
+      const byteIndex = (result.length - 1 - i) % hash.length;
+      const j = Math.floor((hash[byteIndex] / 255) * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+
+    // Mark top 3 multipliers as golden coins
+    const sorted = [...result].map((m, i) => ({ m, i })).sort((a, b) => b.m - a.m);
+    for (let i = 0; i < Math.min(3, sorted.length); i++) {
+      goldenCoins.push(sorted[i].i);
+    }
+
+    return { multipliers: result, goldenCoins };
+  }
+
+  private generateGoldenPegs(risk: PlinkoRisk, rows: number, payoutSeed: string): Array<{ row: number; position: number; multiplier: number }> {
+    const count = this.goldenPegCount[rows] || 5;
+    const multiplierPool = this.lightningMultipliers[risk] || this.lightningMultipliers['lightning-medium'];
+    
+    const hash = crypto.createHash('sha256').update(payoutSeed + 'golden').digest();
+    const goldenPegs: Array<{ row: number; position: number; multiplier: number }> = [];
+    
+    for (let i = 0; i < count; i++) {
+      // Avoid first 2 and last 2 rows
+      const row = 2 + (hash[i * 3] % Math.max(1, rows - 4));
+      const position = hash[i * 3 + 1] % (row + 2);
+      const multiplier = multiplierPool[hash[i * 3 + 2] % multiplierPool.length];
+      
+      goldenPegs.push({ row, position, multiplier });
+    }
+    
+    return goldenPegs;
+  }
+
+  private generateDeadZones(risk: PlinkoRisk, rows: number, payoutSeed: string): number[] {
+    const count = this.deadZoneCount[risk] || 3;
+    const totalSlots = rows + 1;
+    
+    const hash = crypto.createHash('sha256').update(payoutSeed + 'dead').digest();
+    const deadZones: number[] = [];
+    
+    for (let i = 0; i < count && i < hash.length; i++) {
+      const slot = hash[i] % totalSlots;
+      if (!deadZones.includes(slot)) {
+        deadZones.push(slot);
+      }
+    }
+    
+    return deadZones.sort((a, b) => a - b);
+  }
+
+  private checkGoldenPegHits(path: number[], goldenPegs: Array<{ row: number; position: number; multiplier: number }>): Array<{ row: number; position: number; multiplier: number }> {
+    const hits: Array<{ row: number; position: number; multiplier: number }> = [];
+    let currentPosition = 0;
+    
+    path.forEach((direction, rowIndex) => {
+      // Check if current position matches any golden peg
+      const hit = goldenPegs.find(peg => peg.row === rowIndex && peg.position === currentPosition);
+      if (hit) {
+        hits.push(hit);
+      }
+      
+      // Update position for next row
+      currentPosition += direction;
+    });
+    
+    return hits;
+  }
+
+  static generateNewPayoutSeed(): string {
+    return crypto.randomBytes(4).toString('base64').replace(/[^a-zA-Z0-9]/g, '').substring(0, 6);
   }
 
   /**
