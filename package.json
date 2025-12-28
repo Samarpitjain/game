@@ -10,10 +10,12 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "start": "turbo run start",
-    "db:generate": "cd packages/database && prisma generate",
-    "db:migrate": "cd packages/database && prisma migrate dev",
-    "db:push": "cd packages/database && prisma db push",
-    "db:studio": "cd packages/database && prisma studio"
+    "db:seed": "cd packages/database && npm run seed",
+    "db:seed:games": "cd packages/database && npm run seed:games",
+    "db:seed:jackpots": "cd packages/database && npm run seed:jackpots",
+    "db:indexes": "cd packages/database && npm run indexes",
+    "mongo:start": "mongod --dbpath ./data/db",
+    "mongo:stop": "pkill mongod"
   },
   "devDependencies": {
     "turbo": "^1.11.2",

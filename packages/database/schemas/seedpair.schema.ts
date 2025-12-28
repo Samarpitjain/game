@@ -8,6 +8,7 @@ export interface ISeedPair extends Document {
   nonce: number;
   isActive: boolean;
   revealed: boolean;
+  activeGameSession?: string; // NEW: Track active game session
   createdAt: Date;
   revealedAt?: Date;
 }
@@ -20,6 +21,7 @@ const seedPairSchema = new Schema<ISeedPair>({
   nonce: { type: Number, default: 0 },
   isActive: { type: Boolean, default: true },
   revealed: { type: Boolean, default: false },
+  activeGameSession: { type: String }, // NEW: Track active game session
   revealedAt: { type: Date }
 }, { timestamps: true });
 

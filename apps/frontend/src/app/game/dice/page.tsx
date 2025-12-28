@@ -8,6 +8,7 @@ import { useAutoBetSocket } from '@/hooks/useAutoBetSocket';
 import BetModeSelector from '@/components/betting/BetModeSelector';
 import ManualBetControls from '@/components/betting/ManualBetControls';
 import AutoBetControls, { AutoBetConfig } from '@/components/betting/AutoBetControls';
+import StrategySelector from '@/components/betting/StrategySelector';
 import DiceGameControls, { DiceGameParams } from '@/components/games/dice/DiceGameControls';
 import FairnessModal from '@/components/games/FairnessModal';
 
@@ -17,10 +18,12 @@ export default function DicePage() {
   const [betMode, setBetMode] = useState<BetMode>('manual');
   const [amount, setAmount] = useState(10);
   const [gameParams, setGameParams] = useState<DiceGameParams>({
+    mode: 'classic',
     multiplier: 2.0,
     winChance: 49.5,
     target: 50.5,
     isOver: true,
+    rangeType: 'over',
   });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -80,11 +83,15 @@ export default function DicePage() {
 
     setLoading(true);
     try {
+      const betParams = gameParams.mode === 'classic'
+        ? { mode: 'classic', target: gameParams.target, isOver: gameParams.isOver }
+        : { mode: 'ultimate', rangeStart: gameParams.rangeStart, rangeEnd: gameParams.rangeEnd, rollInside: gameParams.rollInside };
+
       const response = await betAPI.place({
         gameType: 'DICE',
         currency: 'USD',
         amount,
-        gameParams: { target: gameParams.target, isOver: gameParams.isOver },
+        gameParams: betParams,
       });
 
       const { bet, result: gameResult } = response.data;
@@ -108,11 +115,15 @@ export default function DicePage() {
 
   const handleStartAutoBet = async (config: AutoBetConfig) => {
     try {
+      const betParams = gameParams.mode === 'classic'
+        ? { mode: 'classic', target: gameParams.target, isOver: gameParams.isOver }
+        : { mode: 'ultimate', rangeStart: gameParams.rangeStart, rangeEnd: gameParams.rangeEnd, rollInside: gameParams.rollInside };
+
       await betAPI.startAutobet({
         gameType: 'DICE',
         currency: 'USD',
         amount,
-        gameParams: { target: gameParams.target, isOver: gameParams.isOver },
+        gameParams: betParams,
         config,
       });
       setAutoBetActive(true);
@@ -162,11 +173,59 @@ export default function DicePage() {
 
               {/* Result Display */}
               {result && (
-                <div className={`mb-6 p-6 rounded-lg text-center ${result.won ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
-                  <div className="text-6xl font-bold mb-2">{result.roll}</div>
-                  <div className="text-2xl mb-2">{result.won ? '🎉 WIN!' : '😢 LOST'}</div>
-                  <div className="text-xl">
-                    {result.won ? `+$${(amount * gameParams.multiplier - amount).toFixed(2)}` : `-$${amount.toFixed(2)}`}
+                <div className={`mb-6 p-6 rounded-lg ${result.won ? 'bg-green-900/20 border border-green-500' : 'bg-red-900/20 border border-red-500'}`}>
+                  <div className="text-center">
+                    <div className="text-6xl font-bold mb-2">{result.roll?.toFixed(2)}</div>
+                    <div className="text-2xl mb-2">{result.won ? '🎉 WIN!' : '😢 LOST'}</div>
+                    <div className="text-xl">
+                      {result.won ? `+$${(amount * gameParams.multiplier - amount).toFixed(2)}` : `-$${amount.toFixed(2)}`}
+                    </div>
+                  </div>
+                  
+                  {/* Visual Result Bar */}
+                  <div className="mt-4 relative h-12 bg-gray-700 rounded-lg overflow-hidden">
+                    {gameParams.rangeType === 'under' && (
+                      <>
+                        <div className="absolute h-full bg-green-500/30" style={{ left: 0, width: `${gameParams.target}%` }} />
+                        <div className="absolute h-full bg-orange-500/30" style={{ left: `${gameParams.target}%`, width: `${100 - (gameParams.target || 0)}%` }} />
+                        <div className="absolute top-0 w-0.5 h-full bg-white" style={{ left: `${gameParams.target}%` }} />
+                      </>
+                    )}
+                    {gameParams.rangeType === 'over' && (
+                      <>
+                        <div className="absolute h-full bg-orange-500/30" style={{ left: 0, width: `${gameParams.target}%` }} />
+                        <div className="absolute h-full bg-green-500/30" style={{ left: `${gameParams.target}%`, width: `${100 - (gameParams.target || 0)}%` }} />
+                        <div className="absolute top-0 w-0.5 h-full bg-white" style={{ left: `${gameParams.target}%` }} />
+                      </>
+                    )}
+                    {gameParams.rangeType === 'inside' && (
+                      <>
+                        <div className="absolute h-full bg-orange-500/30" style={{ left: 0, width: `${gameParams.rangeStart}%` }} />
+                        <div className="absolute h-full bg-green-500/30" style={{ left: `${gameParams.rangeStart}%`, width: `${(gameParams.rangeEnd || 0) - (gameParams.rangeStart || 0)}%` }} />
+                        <div className="absolute h-full bg-orange-500/30" style={{ left: `${gameParams.rangeEnd}%`, width: `${100 - (gameParams.rangeEnd || 0)}%` }} />
+                        <div className="absolute top-0 w-0.5 h-full bg-white" style={{ left: `${gameParams.rangeStart}%` }} />
+                        <div className="absolute top-0 w-0.5 h-full bg-white" style={{ left: `${gameParams.rangeEnd}%` }} />
+                      </>
+                    )}
+                    {gameParams.rangeType === 'outside' && (
+                      <>
+                        <div className="absolute h-full bg-green-500/30" style={{ left: 0, width: `${gameParams.rangeStart}%` }} />
+                        <div className="absolute h-full bg-orange-500/30" style={{ left: `${gameParams.rangeStart}%`, width: `${(gameParams.rangeEnd || 0) - (gameParams.rangeStart || 0)}%` }} />
+                        <div className="absolute h-full bg-green-500/30" style={{ left: `${gameParams.rangeEnd}%`, width: `${100 - (gameParams.rangeEnd || 0)}%` }} />
+                        <div className="absolute top-0 w-0.5 h-full bg-white" style={{ left: `${gameParams.rangeStart}%` }} />
+                        <div className="absolute top-0 w-0.5 h-full bg-white" style={{ left: `${gameParams.rangeEnd}%` }} />
+                      </>
+                    )}
+                    <div className="absolute top-0 w-1 h-full bg-yellow-400 shadow-lg z-10" style={{ left: `${result.roll}%` }}>
+                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-yellow-400 font-bold text-sm whitespace-nowrap">
+                        ▼ {result.roll?.toFixed(2)}
+                      </div>
+                    </div>
+                    <div className="absolute inset-0 flex items-center justify-between px-2 text-xs text-white font-bold pointer-events-none">
+                      <span>0</span>
+                      <span>50</span>
+                      <span>100</span>
+                    </div>
                   </div>
                 </div>
               )}
@@ -198,6 +257,7 @@ export default function DicePage() {
                   onBet={placeBet}
                   disabled={autoBetActive}
                   loading={loading}
+                  multiplier={gameParams.multiplier}
                 />
               )}
 
@@ -214,11 +274,17 @@ export default function DicePage() {
                 />
               )}
 
-              {/* Strategy (Coming Soon) */}
+              {/* Strategy */}
               {betMode === 'strategy' && (
-                <div className="text-center py-8 text-gray-400">
-                  Strategy mode coming soon...
-                </div>
+                <StrategySelector
+                  amount={amount}
+                  balance={balance}
+                  onAmountChange={setAmount}
+                  onStart={handleStartAutoBet}
+                  onStop={handleStopAutoBet}
+                  isActive={autoBetActive}
+                  disabled={loading || amount <= 0 || amount > balance}
+                />
               )}
             </div>
 

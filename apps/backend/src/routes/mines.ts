@@ -52,6 +52,9 @@ router.post('/start', authenticate, async (req: AuthRequest, res) => {
       nonce: seedData.nonce,
     });
 
+    // Lock seed for this game session
+    await SeedManager.lockSeedForGame(req.userId!, session._id.toString());
+
     res.json({
       sessionId: session._id,
       gridSize,
@@ -82,6 +85,9 @@ router.post('/reveal', authenticate, async (req: AuthRequest, res) => {
     if (isMine) {
       session.active = false;
       await session.save();
+
+      // Unlock seed when game ends
+      await SeedManager.unlockSeedAfterGame(session._id.toString());
 
       const bet = await Bet.create({
         userId: req.userId,
@@ -120,6 +126,83 @@ router.post('/reveal', authenticate, async (req: AuthRequest, res) => {
       gameOver: false,
       currentMultiplier: multiplier,
       revealedTiles: session.revealedTiles,
+      gemsFound: safeTilesRevealed,
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/random-reveal', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { sessionId } = req.body;
+
+    const session = await MinesSession.findOne({ _id: sessionId, userId: req.userId, active: true });
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const allTiles = Array.from({ length: session.gridSize }, (_, i) => i);
+    const unopenedTiles = allTiles.filter(i => !session.revealedTiles.includes(i));
+    
+    if (unopenedTiles.length === 0) {
+      return res.status(400).json({ error: 'No tiles left to reveal' });
+    }
+
+    const randomIndex = Math.floor(Math.random() * unopenedTiles.length);
+    const tileIndex = unopenedTiles[randomIndex];
+
+    const isMine = session.grid[tileIndex];
+    session.revealedTiles.push(tileIndex);
+
+    if (isMine) {
+      session.active = false;
+      await session.save();
+
+      // Unlock seed when game ends
+      await SeedManager.unlockSeedAfterGame(session._id.toString());
+
+      const bet = await Bet.create({
+        userId: req.userId,
+        gameType: 'MINES',
+        currency: session.currency,
+        amount: session.betAmount,
+        multiplier: 0,
+        payout: 0,
+        profit: -session.betAmount,
+        won: false,
+        seedPairId: session.seedPairId,
+        nonce: session.nonce,
+        gameData: { minesCount: session.minesCount, revealedTiles: session.revealedTiles },
+        result: { hitMine: true, tileIndex, randomPick: true },
+      });
+
+      return res.json({
+        safe: false,
+        gameOver: true,
+        hitMine: true,
+        tileIndex,
+        randomPick: true,
+        grid: session.grid,
+        bet,
+      });
+    }
+
+    const minesGame = new MinesGame(gameConfig);
+    const safeTilesRevealed = session.revealedTiles.filter(t => !session.grid[t]).length;
+    const multiplier = (minesGame as any).calculateMultiplier(session.gridSize, session.minesCount, safeTilesRevealed);
+    
+    session.currentMultiplier = multiplier;
+    await session.save();
+
+    res.json({
+      safe: true,
+      gameOver: false,
+      tileIndex,
+      randomPick: true,
+      currentMultiplier: multiplier,
+      revealedTiles: session.revealedTiles,
+      gemsFound: safeTilesRevealed,
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -168,6 +251,9 @@ router.post('/cashout', authenticate, async (req: AuthRequest, res) => {
     session.betId = bet._id;
     await session.save();
 
+    // Unlock seed when game ends
+    await SeedManager.unlockSeedAfterGame(session._id.toString());
+
     res.json({
       bet,
       payout,
@@ -176,6 +262,26 @@ router.post('/cashout', authenticate, async (req: AuthRequest, res) => {
       grid: session.grid,
       wallet: { balance: wallet?.balance },
     });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/cleanup', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const activeSession = await MinesSession.findOne({ userId: req.userId, active: true });
+    
+    if (activeSession) {
+      activeSession.active = false;
+      await activeSession.save();
+      
+      // Unlock seed when session is cleaned up
+      await SeedManager.unlockSeedAfterGame(activeSession._id.toString());
+      
+      res.json({ message: 'Active session cleaned up', sessionId: activeSession._id });
+    } else {
+      res.json({ message: 'No active session found' });
+    }
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

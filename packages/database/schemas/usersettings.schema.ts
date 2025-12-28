@@ -9,6 +9,7 @@ export interface IUserSettings extends Document {
   showMaxBet: boolean;
   instantBet: boolean;
   theatreMode: boolean;
+  rakebackOptIn: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,7 +22,8 @@ const userSettingsSchema = new Schema<IUserSettings>({
   soundVolume: { type: Number, default: 0.5 },
   showMaxBet: { type: Boolean, default: true },
   instantBet: { type: Boolean, default: false },
-  theatreMode: { type: Boolean, default: false }
+  theatreMode: { type: Boolean, default: false },
+  rakebackOptIn: { type: Boolean, default: false }
 }, { timestamps: true });
 
 export const UserSettings = model<IUserSettings>('UserSettings', userSettingsSchema);

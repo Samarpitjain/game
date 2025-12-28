@@ -16,6 +16,12 @@ import jackpotRoutes from './routes/jackpot';
 import leaderboardRoutes from './routes/leaderboard';
 import adminRoutes from './routes/admin';
 import minesRoutes from './routes/mines';
+import towerRoutes from './routes/tower';
+import stairsRoutes from './routes/stairs';
+import hiloRoutes from './routes/hilo';
+import blackjackRoutes from './routes/blackjack';
+import pvpRoutes from './routes/pvp';
+import rakebackRoutes from './routes/rakeback';
 
 // WebSocket handlers
 import { setupCrashSocket } from './websocket/crash';
@@ -60,6 +66,12 @@ async function start() {
   app.use('/api/leaderboard', leaderboardRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/mines', minesRoutes);
+  app.use('/api/tower', towerRoutes);
+  app.use('/api/stairs', stairsRoutes);
+  app.use('/api/hilo', hiloRoutes);
+  app.use('/api/blackjack', blackjackRoutes);
+  app.use('/api/pvp', pvpRoutes);
+  app.use('/api/rakeback', rakebackRoutes);
 
   // Setup Socket.IO
   const io = new Server(httpServer, {

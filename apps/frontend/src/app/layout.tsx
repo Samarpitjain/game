@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Toaster } from 'react-hot-toast';
+import JackpotNotifications from '@/components/JackpotNotifications';
 import '@/styles/globals.css';
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export default function RootLayout({
     <html lang="en">
       <body>
         {children}
+        <JackpotNotifications />
         <Toaster position="top-right" />
       </body>
     </html>

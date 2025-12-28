@@ -33,7 +33,10 @@ export const betAPI = {
   place: (data: any) => api.post('/bet/place', data),
   history: (limit?: number, offset?: number) =>
     api.get('/bet/history', { params: { limit, offset } }),
+  getHistory: (limit?: number, offset?: number) =>
+    api.get('/bet/history', { params: { limit, offset } }),
   getById: (betId: string) => api.get(`/bet/${betId}`),
+  verify: (betId: string) => api.post('/bet/verify', { betId }),
   startAutobet: (data: any) => api.post('/bet/autobet/start', data),
   stopAutobet: () => api.post('/bet/autobet/stop'),
   autobetStatus: () => api.get('/bet/autobet/status'),
@@ -114,8 +117,58 @@ export const minesAPI = {
     api.post('/mines/start', data),
   reveal: (data: { sessionId: string; tileIndex: number }) =>
     api.post('/mines/reveal', data),
+  randomReveal: (data: { sessionId: string }) =>
+    api.post('/mines/random-reveal', data),
   cashout: (data: { sessionId: string }) =>
     api.post('/mines/cashout', data),
+  cleanup: () =>
+    api.post('/mines/cleanup'),
+};
+
+// Tower API
+export const towerAPI = {
+  start: (data: { floors: number; betAmount: number; currency: string }) =>
+    api.post('/tower/start', data),
+  reveal: (data: { sessionId: string; tileIndex: number }) =>
+    api.post('/tower/reveal', data),
+  cashout: (data: { sessionId: string }) =>
+    api.post('/tower/cashout', data),
+};
+
+// Stairs API
+export const stairsAPI = {
+  start: (data: { steps: number; betAmount: number; currency: string }) =>
+    api.post('/stairs/start', data),
+  reveal: (data: { sessionId: string; tileIndex: number }) =>
+    api.post('/stairs/reveal', data),
+  cashout: (data: { sessionId: string }) =>
+    api.post('/stairs/cashout', data),
+};
+
+// HiLo API
+export const hiloAPI = {
+  start: (data: { betAmount: number; currency: string }) =>
+    api.post('/hilo/start', data),
+  predict: (data: { sessionId: string; choice: 'higher' | 'lower' | 'skip' }) =>
+    api.post('/hilo/predict', data),
+  cashout: (data: { sessionId: string }) =>
+    api.post('/hilo/cashout', data),
+  probabilities: (currentCard: number, cardHistory: number[] = []) =>
+    api.get(`/hilo/probabilities/${currentCard}`, { 
+      params: { cardHistory: JSON.stringify(cardHistory) } 
+    }),
+};
+
+// Blackjack API
+export const blackjackAPI = {
+  start: (data: { betAmount: number; currency: string }) =>
+    api.post('/blackjack/start', data),
+  hit: (data: { sessionId: string }) =>
+    api.post('/blackjack/hit', data),
+  stand: (data: { sessionId: string }) =>
+    api.post('/blackjack/stand', data),
+  double: (data: { sessionId: string }) =>
+    api.post('/blackjack/double', data),
 };
 
 // Verification API (client-side only, no auth needed)

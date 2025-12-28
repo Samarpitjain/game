@@ -6,6 +6,15 @@ import { PlinkoGame } from './games/plinko';
 import { RouletteGame } from './games/roulette';
 import { KenoGame } from './games/keno';
 import { WheelGame } from './games/wheel';
+import { CoinFlipGame } from './games/coinflip';
+import { RushGame } from './games/rush';
+import { BalloonGame } from './games/balloon';
+import { SoloCrashGame } from './games/solocrash';
+import { FastParityGame } from './games/fastparity';
+import { TowerGame } from './games/tower';
+import { StairsGame } from './games/stairs';
+import { HiLoGame } from './games/hilo';
+import { BlackjackGame } from './games/blackjack';
 
 /**
  * Game Registry - manages all available games
@@ -36,6 +45,15 @@ export class GameRegistry {
     this.register('ROULETTE', RouletteGame, defaultConfig);
     this.register('KENO', KenoGame, defaultConfig);
     this.register('WHEEL', WheelGame, defaultConfig);
+    this.register('COINFLIP', CoinFlipGame, defaultConfig);
+    this.register('RUSH', RushGame, defaultConfig);
+    this.register('BALLOON', BalloonGame, defaultConfig);
+    this.register('SOLOCRASH', SoloCrashGame, defaultConfig);
+    this.register('FASTPARITY', FastParityGame, defaultConfig);
+    this.register('TOWER', TowerGame, defaultConfig);
+    this.register('STAIRS', StairsGame, defaultConfig);
+    this.register('HILO', HiLoGame, defaultConfig);
+    this.register('BLACKJACK', BlackjackGame, defaultConfig);
   }
 
   /**

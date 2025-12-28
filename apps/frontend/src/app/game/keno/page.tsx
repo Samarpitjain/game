@@ -68,6 +68,18 @@ export default function KenoPage() {
     }
   };
 
+  // Calculate expected multiplier for Keno based on selections
+  const getKenoExpectedMultiplier = () => {
+    const count = gameParams.selectedNumbers.length;
+    if (count === 0) return 0;
+    // Average multipliers for medium risk based on number count
+    const avgMultipliers: Record<number, number> = {
+      1: 1.8, 2: 2.25, 3: 3.17, 4: 6.1, 5: 11.5,
+      6: 21.75, 7: 42.5, 8: 82.5, 9: 175, 10: 375
+    };
+    return avgMultipliers[count] || 0;
+  };
+
   const placeBet = async () => {
     if (gameParams.selectedNumbers.length === 0) {
       toast.error('Select at least 1 number');
@@ -205,6 +217,7 @@ export default function KenoPage() {
                   onBet={placeBet}
                   disabled={autoBetActive}
                   loading={loading}
+                  multiplier={getKenoExpectedMultiplier()}
                 />
               )}
 

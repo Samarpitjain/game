@@ -2,16 +2,22 @@ import { BaseGame, BetInput, BetResult } from '../../base-game';
 import { generateFloat, applyHouseEdge } from '@casino/fairness';
 
 export interface DiceParams {
-  target: number;
-  isOver: boolean;
-  ultimateMode?: boolean;
+  mode?: 'classic' | 'ultimate';
+  target?: number;
+  isOver?: boolean;
+  rangeStart?: number;
+  rangeEnd?: number;
+  rollInside?: boolean;
 }
 
 export interface DiceResult {
   roll: number;
-  target: number;
-  isOver: boolean;
   won: boolean;
+  target?: number;
+  isOver?: boolean;
+  rangeStart?: number;
+  rangeEnd?: number;
+  rollInside?: boolean;
 }
 
 /**
@@ -23,37 +29,40 @@ export class DiceGame extends BaseGame {
     this.validateBet(input.amount, input.currency);
     
     const params = input.gameParams as DiceParams;
-    const { target, isOver, ultimateMode } = params;
+    const mode = params.mode || 'classic';
 
-    // Generate roll (0-100 with 2 decimals) - Stake formula
     const float = generateFloat(input.seedData);
     const roll = Math.floor(float * 10001) / 100;
 
-    // Determine win (pure RNG, no house edge)
-    const won = isOver ? roll > target : roll < target;
+    let won: boolean;
+    let winChance: number;
 
-    // Calculate win chance (raw probability from 0-100 range)
-    const winChance = isOver ? (100 - target) : target;
+    if (mode === 'ultimate') {
+      const { rangeStart = 25, rangeEnd = 75, rollInside = true } = params;
+      const inRange = roll >= rangeStart && roll <= rangeEnd;
+      won = rollInside ? inRange : !inRange;
+      winChance = rollInside ? (rangeEnd - rangeStart) : (100 - (rangeEnd - rangeStart));
+    } else {
+      const { target = 50, isOver = true } = params;
+      won = isOver ? roll > target : roll < target;
+      winChance = isOver ? (100 - target) : target;
+    }
 
-    // Calculate multiplier: (99 / winChance) with house edge
     const baseMultiplier = 99 / winChance;
     const multiplier = won ? baseMultiplier * (1 - this.config.houseEdge / 100) : 0;
 
-    // Ultimate mode increases multiplier
-    const finalMultiplier = ultimateMode && won ? multiplier * 1.1 : multiplier;
-
-    const payout = this.calculatePayout(input.amount, finalMultiplier);
+    const payout = this.calculatePayout(input.amount, multiplier);
     const profit = this.calculateProfit(input.amount, payout);
 
     const result: DiceResult = {
       roll,
-      target,
-      isOver,
       won,
+      ...(mode === 'classic' ? { target: params.target, isOver: params.isOver } : {}),
+      ...(mode === 'ultimate' ? { rangeStart: params.rangeStart, rangeEnd: params.rangeEnd, rollInside: params.rollInside } : {}),
     };
 
     return {
-      multiplier: finalMultiplier,
+      multiplier,
       payout,
       profit,
       won,

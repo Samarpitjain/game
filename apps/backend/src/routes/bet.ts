@@ -110,4 +110,15 @@ router.get('/:betId', async (req, res) => {
   return res.json(bet);
 });
 
+// Verify bet
+router.post('/verify', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { betId } = req.body;
+    const verification = await BetEngine.verifyBet(betId);
+    return res.json(verification);
+  } catch (error: any) {
+    return res.status(400).json({ error: error.message });
+  }
+});
+
 export default router;
