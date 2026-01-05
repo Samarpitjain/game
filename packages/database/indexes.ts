@@ -1,66 +1,106 @@
-import { 
-  User, Wallet, Bet, SeedPair, Jackpot, JackpotWin, 
-  Strategy, Contest, ContestEntry, Rakeback, GameConfig,
-  UserSettings, UserStats, Transaction, CrashRound, CrashBet
-} from './schemas';
+import mongoose from 'mongoose';
 
+/**
+ * Create optimized indexes for casino platform
+ * Focuses on high-frequency queries and real-time operations
+ */
 export const createOptimizedIndexes = async () => {
-  console.log('🔧 Creating optimized MongoDB indexes...');
+  const db = mongoose.connection.db;
+  
+  try {
+    // Users collection - Authentication & Profile
+    await db.collection('users').createIndexes([
+      { key: { username: 1 }, unique: true },
+      { key: { email: 1 }, unique: true },
+      { key: { role: 1, isVip: 1 } },
+      { key: { createdAt: -1 } }
+    ]);
 
-  // User indexes for fast lookups
-  await User.collection.createIndex({ username: 1 }, { unique: true });
-  await User.collection.createIndex({ email: 1 }, { unique: true });
-  await User.collection.createIndex({ role: 1 });
-  await User.collection.createIndex({ isVip: 1, isPremium: 1 });
+    // Bets collection - High frequency queries
+    await db.collection('bets').createIndexes([
+      { key: { userId: 1, createdAt: -1 } },
+      { key: { gameType: 1, createdAt: -1 } },
+      { key: { status: 1, amount: -1 } },
+      { key: { multiplier: -1 } }, // For leaderboards
+      { key: { payout: -1 } }, // For big wins
+      { key: { seedPairId: 1, nonce: 1 } } // For verification
+    ]);
 
-  // Wallet indexes for balance operations
-  await Wallet.collection.createIndex({ userId: 1, currency: 1 }, { unique: true });
-  await Wallet.collection.createIndex({ userId: 1 });
-  await Wallet.collection.createIndex({ currency: 1 });
+    // Wallets collection - Financial operations
+    await db.collection('wallets').createIndexes([
+      { key: { userId: 1, currency: 1 }, unique: true },
+      { key: { userId: 1 } },
+      { key: { balance: -1 } }
+    ]);
 
-  // Bet indexes for history and analytics
-  await Bet.collection.createIndex({ userId: 1, createdAt: -1 });
-  await Bet.collection.createIndex({ gameType: 1, createdAt: -1 });
-  await Bet.collection.createIndex({ status: 1, createdAt: -1 });
-  await Bet.collection.createIndex({ currency: 1, amount: -1 });
-  await Bet.collection.createIndex({ profit: -1, createdAt: -1 }); // Big wins
-  await Bet.collection.createIndex({ multiplier: -1, createdAt: -1 }); // Lucky wins
-  await Bet.collection.createIndex({ amount: -1, createdAt: -1 }); // High rollers
-  await Bet.collection.createIndex({ isDemo: 1, userId: 1 });
+    // Seed pairs collection - Provably fair
+    await db.collection('seedpairs').createIndexes([
+      { key: { userId: 1, isActive: 1 } },
+      { key: { userId: 1, createdAt: -1 } },
+      { key: { revealed: 1, createdAt: -1 } }
+    ]);
 
-  // SeedPair indexes for fairness
-  await SeedPair.collection.createIndex({ userId: 1, isActive: 1 });
-  await SeedPair.collection.createIndex({ userId: 1, nonce: 1 });
-  await SeedPair.collection.createIndex({ revealed: 1, createdAt: -1 });
+    // Fast Parity rounds - Real-time game
+    await db.collection('fastparityrounds').createIndexes([
+      { key: { status: 1, startTime: -1 } },
+      { key: { createdAt: -1 } },
+      { key: { 'bets.userId': 1 } },
+      { key: { number: 1, color: 1 } } // For statistics
+    ]);
 
-  // Jackpot indexes
-  await Jackpot.collection.createIndex({ gameType: 1, currency: 1 });
-  await Jackpot.collection.createIndex({ status: 1 });
-  await Jackpot.collection.createIndex({ currentAmount: -1 });
+    // Jackpots collection
+    await db.collection('jackpots').createIndexes([
+      { key: { gameType: 1, currency: 1 } },
+      { key: { status: 1 } },
+      { key: { currentAmount: -1 } }
+    ]);
 
-  // JackpotWin indexes
-  await JackpotWin.collection.createIndex({ userId: 1, createdAt: -1 });
-  await JackpotWin.collection.createIndex({ amount: -1, createdAt: -1 });
+    // User stats collection
+    await db.collection('userstats').createIndexes([
+      { key: { userId: 1 }, unique: true },
+      { key: { totalProfit: -1 } },
+      { key: { totalWagered: -1 } }
+    ]);
 
-  // Strategy indexes
-  await Strategy.collection.createIndex({ userId: 1 });
-  await Strategy.collection.createIndex({ isPublic: 1, gameType: 1 });
-  await Strategy.collection.createIndex({ totalUses: -1 });
+    // Transactions collection - Financial audit
+    await db.collection('transactions').createIndexes([
+      { key: { userId: 1, createdAt: -1 } },
+      { key: { type: 1, createdAt: -1 } },
+      { key: { walletId: 1, createdAt: -1 } }
+    ]);
 
-  // Contest indexes
-  await Contest.collection.createIndex({ startAt: 1, endAt: 1 });
-  await Contest.collection.createIndex({ type: 1, currency: 1 });
+    // Game sessions - Multi-step games
+    await db.collection('minessessions').createIndexes([
+      { key: { userId: 1, isActive: 1 } },
+      { key: { createdAt: -1 } }
+    ]);
 
-  // Transaction indexes for audit
-  await Transaction.collection.createIndex({ userId: 1, createdAt: -1 });
-  await Transaction.collection.createIndex({ type: 1, createdAt: -1 });
-  await Transaction.collection.createIndex({ walletId: 1, createdAt: -1 });
+    await db.collection('towersessions').createIndexes([
+      { key: { userId: 1, isActive: 1 } },
+      { key: { createdAt: -1 } }
+    ]);
 
-  // Crash game indexes
-  await CrashRound.collection.createIndex({ roundNumber: 1 }, { unique: true });
-  await CrashRound.collection.createIndex({ startedAt: -1 });
-  await CrashBet.collection.createIndex({ roundId: 1, userId: 1 });
-  await CrashBet.collection.createIndex({ userId: 1, createdAt: -1 });
+    await db.collection('hilosessions').createIndexes([
+      { key: { userId: 1, isActive: 1 } },
+      { key: { createdAt: -1 } }
+    ]);
 
-  console.log('✅ All MongoDB indexes created successfully');
+    // PVP games
+    await db.collection('pvpgames').createIndexes([
+      { key: { status: 1, gameType: 1 } },
+      { key: { players: 1 } },
+      { key: { shareableLink: 1 }, unique: true }
+    ]);
+
+    // Contests & Competitions
+    await db.collection('contests').createIndexes([
+      { key: { startAt: 1, endAt: 1 } },
+      { key: { type: 1, currency: 1 } }
+    ]);
+
+    console.log('✅ All optimized indexes created successfully');
+  } catch (error) {
+    console.error('❌ Error creating indexes:', error);
+    throw error;
+  }
 };

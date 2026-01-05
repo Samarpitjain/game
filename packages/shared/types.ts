@@ -16,6 +16,7 @@ export enum GameType {
   COINFLIP = 'COINFLIP',
   TRENBALL = 'TRENBALL',
   STAIRS = 'STAIRS',
+  LUDO = 'LUDO',
 }
 
 export enum Currency {

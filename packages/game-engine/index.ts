@@ -14,3 +14,4 @@ export { TowerGame } from './games/tower';
 export { StairsGame } from './games/stairs';
 export { HiLoGame } from './games/hilo';
 export { BlackjackGame } from './games/blackjack';
+export { LudoGame, LudoMode, LudoGameState } from './games/ludo';

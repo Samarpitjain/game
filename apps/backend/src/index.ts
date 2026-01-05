@@ -26,6 +26,8 @@ import rakebackRoutes from './routes/rakeback';
 // WebSocket handlers
 import { setupCrashSocket } from './websocket/crash';
 import { setupTrenballSocket } from './websocket/trenball';
+import { setupFastParitySocket } from './websocket/fastparity';
+import { setupLudoSocket } from './websocket/ludo';
 
 // Services
 import { AutoBetService } from './services/autobet-service';
@@ -102,6 +104,8 @@ async function start() {
 
   setupCrashSocket(io);
   setupTrenballSocket(io);
+  setupFastParitySocket(io);
+  setupLudoSocket(io);
 
   // Start AutoBet worker
   await AutoBetService.startWorker();
