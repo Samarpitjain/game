@@ -47,7 +47,6 @@ const pvpGameSchema = new Schema<IPVPGame>({
 }, { timestamps: true });
 
 pvpGameSchema.index({ status: 1, gameType: 1 });
-pvpGameSchema.index({ shareableLink: 1 });
 pvpGameSchema.index({ players: 1 });
 
 export const PVPGame = model<IPVPGame>('PVPGame', pvpGameSchema);

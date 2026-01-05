@@ -16,6 +16,7 @@ export * from './towersession.schema';
 export * from './stairssession.schema';
 export * from './hilosession.schema';
 export * from './blackjacksession.schema';
+export * from './fastparityround.schema';
 export * from './favoritegame.schema';
 export * from './useractivity.schema';
 export * from './pvpgame.schema';

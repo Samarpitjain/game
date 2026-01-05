@@ -23,7 +23,7 @@ const games = [
   { id: 'blackjack', name: 'Blackjack', icon: '♠️', status: 'live' },
   { id: 'crash', name: 'Crash MP', icon: '📈', status: 'live' },
   { id: 'trenball', name: 'Trenball', icon: '⚽', status: 'live' },
-  { id: 'ludo', name: 'Ludo', icon: '🎲', status: 'coming' },
+  { id: 'ludo', name: 'Ludo', icon: '🎲', status: 'live' },
   { id: 'chess', name: 'Chess', icon: '♟️', status: 'coming' },
 ];
 
