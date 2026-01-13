@@ -1,3 +1,5 @@
+@import './design-tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -7,13 +9,20 @@
   --secondary: #FFC100;
   --special: #73FFD7;
   --alt: #9D73FF;
+  --border: #31313F;
+  --text-muted: #5B5B79;
+  --text-secondary: #828282;
+  --orange: #FF4500;
+  --orange-light: #FF9169;
 }
 
 body {
-  @apply bg-gray-900 text-white;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+  @apply text-white;
+  background: radial-gradient(50% 50% at 50% 50%, #000000 0%, #080819 100%);
+  font-family: 'Barlow Condensed', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
+  min-height: 100vh;
 }
 
 /* Retro glow effects */
@@ -29,9 +38,20 @@ body {
   box-shadow: 0 0 20px rgba(115, 255, 215, 0.5);
 }
 
+.glow-orange {
+  box-shadow: 0 0 20px rgba(255, 69, 0, 0.5);
+}
+
 /* Gradient text */
 .gradient-text {
   background: linear-gradient(to right, #C20DFF, #00C3FF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-trending {
+  background: linear-gradient(90deg, #FF6B35 0%, #FFB347 25%, #87CEEB 50%, #DDA0DD 75%, #FF6B35 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -46,9 +66,24 @@ body {
   @apply bg-secondary hover:bg-secondary/80 text-gray-900 font-bold py-2 px-6 rounded-lg transition-all;
 }
 
+.btn-orange {
+  background: #FF4500;
+  color: white;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-orange:hover {
+  background: #FF5722;
+}
+
 /* Card styles */
 .card {
-  @apply bg-gray-800 rounded-lg p-6 border border-gray-700;
+  border: 1px solid #31313F;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* Input styles */
@@ -58,9 +93,12 @@ body {
 
 /* Animations */
 @keyframes pulse-glow {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 20px rgba(255, 13, 183, 0.5);
   }
+
   50% {
     box-shadow: 0 0 40px rgba(255, 13, 183, 0.8);
   }
@@ -133,7 +171,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: white;
   cursor: pointer;
   border: 2px solid #10b981;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 input[type="range"]::-moz-range-thumb {
@@ -143,7 +181,7 @@ input[type="range"]::-moz-range-thumb {
   background: white;
   cursor: pointer;
   border: 2px solid #10b981;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 input[type="range"]::-webkit-slider-runnable-track {
@@ -154,4 +192,23 @@ input[type="range"]::-webkit-slider-runnable-track {
 input[type="range"]::-moz-range-track {
   height: 8px;
   background: transparent;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0A0A14;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #31313F;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5B5B79;
 }

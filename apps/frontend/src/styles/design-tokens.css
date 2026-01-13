@@ -1,0 +1,89 @@
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN TOKENS - OREBIT Casino Homepage
+   Extracted from Figma Design
+═══════════════════════════════════════════════════════════════════ */
+
+:root {
+    /* ─── Colors ─── */
+    --color-bg-primary: #000000;
+    --color-bg-secondary: #080819;
+    --color-bg-card: rgba(255, 255, 255, 0.06);
+    --color-bg-button: rgba(255, 255, 255, 0.06);
+
+    --color-border: #31313F;
+    --color-border-card: #32323F;
+
+    --color-accent-teal: #73FFD7;
+    --color-accent-orange: #FF4500;
+    --color-accent-orange-light: #FF9169;
+    --color-accent-green: #25A655;
+    --color-accent-gold: #FFA701;
+
+    --color-text-primary: #FFFFFF;
+    --color-text-secondary: #828282;
+    --color-text-muted: #5B5B79;
+    --color-text-light: #C1C1C1;
+    --color-text-lighter: #B8B8B8;
+    --color-text-placeholder: #424252;
+    --color-text-inactive: #AEAEAE;
+
+    /* ─── Typography ─── */
+    --font-family: 'Barlow Condensed', sans-serif;
+    --letter-spacing: 0.08em;
+
+    --font-size-xs: 10px;
+    --font-size-sm: 12px;
+    --font-size-base: 14px;
+    --font-size-lg: 19px;
+    --font-size-xl: 24px;
+    --font-size-2xl: 28px;
+
+    --line-height-xs: 12px;
+    --line-height-sm: 14px;
+    --line-height-base: 17px;
+    --line-height-lg: 23px;
+    --line-height-xl: 29px;
+
+    --font-weight-light: 300;
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-extrabold: 800;
+
+    /* ─── Spacing ─── */
+    --spacing-xs: 3px;
+    --spacing-sm: 6px;
+    --spacing-md: 12px;
+    --spacing-lg: 16px;
+    --spacing-xl: 24px;
+    --spacing-2xl: 32px;
+    --spacing-3xl: 64px;
+
+    /* ─── Border Radius ─── */
+    --radius-sm: 3px;
+    --radius-md: 4px;
+    --radius-lg: 200px;
+
+    /* ─── Shadows ─── */
+    --shadow-teal-glow: 0px 0px 12px 3px rgba(115, 255, 215, 0.64);
+    --shadow-teal-glow-lg: 0px 0px 64px 12px #73FFD7;
+    --shadow-orange-glow: 0px 0px 48px 14px #DB5506;
+    --shadow-orange-glow-lg: 0px 0px 64px 12px #FFA701;
+    --shadow-red-glow: 0px 0px 24px 6px #FF4500;
+    --shadow-indicator: 0px 0px 16px 2px rgba(115, 255, 215, 0.64);
+
+    /* ─── Gradients ─── */
+    --gradient-bg: radial-gradient(50% 50% at 50% 50%, #000000 0%, #080819 100%);
+    --gradient-gold: linear-gradient(80.53deg, #FFE500 14.21%, #FF6A00 85.43%);
+    --gradient-gold-transparent: linear-gradient(80.53deg, rgba(255, 229, 0, 0.06) 14.21%, rgba(255, 106, 0, 0.06) 85.43%);
+    --gradient-trending: linear-gradient(90deg, #FF6B35 0%, #FFB347 25%, #87CEEB 50%, #DDA0DD 75%, #FF6B35 100%);
+    --gradient-avatar: linear-gradient(135deg, #9D73FF, #FF0DB7);
+
+    /* ─── Layout ─── */
+    --page-width: 1440px;
+    --page-min-height: 1522px;
+    --header-height: 41px;
+    --footer-height: 50px;
+    --page-padding: 32px;
+}
